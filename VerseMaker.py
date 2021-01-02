@@ -95,7 +95,7 @@ class VerseMaker:
 
         # Try to have even distribution of lines per slide
         numOfSlides = int(lineCount/maxLinesPerSlide) if lineCount % maxLinesPerSlide == 0 \
-            else math.ceil(lineCount / maxLinesPerSlide + 0.1)                  # Heuristic : "Fudging" the statistic (guess-timation)
+            else math.ceil(lineCount / maxLinesPerSlide + 0.1)                  # Heuristic : "Fudging" the statistic (guess-timation) for better aesthetics
         linesPerSlide = round((lineCount/numOfSlides + maxLinesPerSlide) / 2)   # Heuristic : Can't have slides too empty
 
         # Split verses for each slide and recalculate ssIndexList
@@ -213,7 +213,7 @@ class VerseMaker:
         verseList = []
 
         # Clean up empty spaces, new lines, and headers
-        verses = re.sub("\n\n\n.*?\n\n", "-", verses)  # Remove sub-chapter headers
+        verses = re.sub("\n\s+\n\s+\n.+?\n\n", "", verses)  # Remove sub-chapter headers
         verses = " ".join(verses.split())
 
         # Iterate verses by search for "[" and "]"

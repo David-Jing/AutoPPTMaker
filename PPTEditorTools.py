@@ -161,6 +161,16 @@ class PPTEditorTools:
                                                        "fields": "spaceAbove"}})
 
     # ==========================================================================================
+    # =================================== SLIDE DATA UPDATERS ==================================
+    # ==========================================================================================
+
+    def updatePageElementTransform(self, objectID, scaleX=1, scaleY=1, translateX=0, translateY=0):
+        # Horizontally and vertically scale or translate slide objects
+        self.requests.append({"updatePageElementTransform": {"objectId": objectID,
+                                                             "applyMode": "RELATIVE",
+                                                             "transform": {"scaleX": scaleX, "scaleY": scaleY, "translateX": translateX, "translateY": translateY, "unit": "EMU"}}})
+
+    # ==========================================================================================
     # ====================================== MISC GETTERS ======================================
     # ==========================================================================================
 

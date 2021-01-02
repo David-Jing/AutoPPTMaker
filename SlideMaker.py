@@ -157,10 +157,20 @@ class SlideMaker:
 
     def _hymnSlide(self, source, slideIndex):
         if (not self.hymnMaker.setSource(source)):
-            print(f"\tERROR: Hymn {source} not found.")
+            print(f"\tERROR: Hymn [{source}] not found.")
             return False
 
         [titleList, lyricsList] = self.hymnMaker.getContent()
+
+        # Title font size adjustments and decide if the lyrics text box needs to be shifted
+        titleSize = int(self.config["HYMN_PROPERTIES"]["HymnTitleTextSize"])
+        maxCharLength = int(self.config["HYMN_PROPERTIES"]["HymnTitleMaxChar"])
+        multiLineTitle = False
+        if (len(titleList[0]) > maxCharLength):                         # Heuristic : Shift the lyrics text block down for better aesthetics for multi-line titles
+            multiLineTitle = True
+            firstLineLength = titleList[0].rfind(" ", 0, maxCharLength)
+            if (len(titleList[0]) - firstLineLength > firstLineLength):  # Heuristic : It's better when there're more text in the first line than second
+                titleSize = int(self.config["HYMN_PROPERTIES"]["HymnTitleMultiLineTextSize"])
 
         # Generate create duplicate request and commit it
         sourceSlideID = self.pptEditor.getSlideID(slideIndex)
@@ -178,17 +188,17 @@ class SlideMaker:
             data = self.pptEditor.getSlideTextData(i)
             try:
                 for item in data:
-                    if '{Title}' in item[1]:
+                    if ('{Title}' in item[1]):
                         checkPoint[0] = True
                         self._insertText(
                             objectID=item[0],
                             text=titleList[i - slideIndex],
-                            size=int(self.config["HYMN_PROPERTIES"]["HymnTitleTextSize"]),
+                            size=titleSize,
                             bold=self.config["HYMN_PROPERTIES"]["HymnTitleBolded"],
                             italic=self.config["HYMN_PROPERTIES"]["HymnTitleItalicized"],
                             underlined=self.config["HYMN_PROPERTIES"]["HymnTitleUnderlined"],
                             alignment=self.config["HYMN_PROPERTIES"]["HymnTitleAlignment"])
-                    elif '{Lyrics}' in item[1]:
+                    elif ('{Lyrics}' in item[1]):
                         checkPoint[1] = True
                         self._insertText(
                             objectID=item[0],
@@ -198,6 +208,9 @@ class SlideMaker:
                             italic=self.config["HYMN_PROPERTIES"]["HymnItalicized"],
                             underlined=self.config["HYMN_PROPERTIES"]["HymnUnderlined"],
                             alignment=self.config["HYMN_PROPERTIES"]["HymnAlignment"])
+
+                        if (multiLineTitle):
+                            self.pptEditor.updatePageElementTransform(item[0], translateY=int(self.config["HYMN_PROPERTIES"]["HymnLoweredHeightAmount"]))
             except:
                 print(f"\tERROR: {os.system.exc_info()[0]}")
                 return False
@@ -211,7 +224,7 @@ class SlideMaker:
     def _scriptureSingleSlide(self, title, source, charPerLine, propertyName, dataNameHeader):
         # Assumes monthly scripture is short enough to fit in one slide
         if (not self.verseMaker.setSource(source, charPerLine)):
-            print(f"\tERROR: Verse {source} not found.")
+            print(f"\tERROR: Verse [{source}] not found.")
             return False
 
         [verseString, ssIndexList] = self.verseMaker.getVerseString()
@@ -399,4 +412,4 @@ if __name__ == '__main__':
         print(f"OPENING {type.upper()} SLIDES...")
         sm.openSlideInBrowser()
 
-    print(f"\nTask completed in : {(time.time() - start):.2f} seconds")
+    print(f"\nTask completed in {(time.time() - start):.2f} seconds.")
