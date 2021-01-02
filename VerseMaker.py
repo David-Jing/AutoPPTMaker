@@ -1,7 +1,9 @@
 import configparser
+import re
 import sys
 import math
 
+from enum import Enum
 from WebLookupTools import WebLookupTools
 
 '''
@@ -11,7 +13,18 @@ Please setSource() before running any getters.
 titleList - list of title text corresponding to the order in lyricsList
 verseList - list of formatted verses
 ssIndexList - list of lists of character indexes that requires super scripting
+
+Superscript alignment:
+ - 1 superscripted character = 2 normal spaces converted to superscript
+ - 2 superscripted characters = 1 normal space converted to superscript
+ - 3 superscripted characters = 1 normal space converted to superscript
 '''
+
+
+class SSType(Enum):
+    # Specifies if the superscripted range is superscripting empty spaces or verse numbers
+    Space = 0
+    VerseNumber = 1
 
 
 class VerseMaker:
@@ -90,6 +103,8 @@ class VerseMaker:
         slideSSIndexList = []   # Assumes each verse has only one symbol to superscript
         verseIndex = 0          # Tracking verse number
         charIndex = 0           # Tracking the number of character parsed, for adjusting ssIndexes
+        ssIndex = 0             # Indexing the list of superscripted ranges
+        ssIndexListLength = len(ssIndexList)
         numOfVerses = len(verseList)
         while(verseIndex < numOfVerses):
             verseString = ""
@@ -99,10 +114,14 @@ class VerseMaker:
 
             # Asserts that a slide must contain at least one verse
             while (nextlineCount > 0 and (currTotalLineCount == 0 or currTotalLineCount + nextlineCount <= linesPerSlide)):
+                isFirstLine = True
                 for line in verseList[verseIndex]:
                     verseString += line
+                    if (ssIndex < ssIndexListLength and (ssIndexList[ssIndex][0] == SSType.Space or isFirstLine)):
+                        isFirstLine = False
+                        currSSSlideIndexList.append([ssIndexList[ssIndex][0], ssIndexList[ssIndex][1] - charIndex, ssIndexList[ssIndex][2] - charIndex])
+                        ssIndex += 1
 
-                currSSSlideIndexList.append([ssIndexList[verseIndex][0] - charIndex, ssIndexList[verseIndex][1] - charIndex])
                 currTotalLineCount += nextlineCount
                 verseIndex += 1
                 nextlineCount = 0 if verseIndex >= numOfVerses else len(verseList[verseIndex])
@@ -130,7 +149,7 @@ class VerseMaker:
                 maxDigits = len(num)
 
         # Create indent spacing
-        indent = "".join(" " for i in range(self.indentSpace))
+        indent = "".join(" " for _ in range(self.indentSpace))
 
         for i in range(len(verseList)):
             # Split verse into separate lines that are within the character limit
@@ -168,13 +187,17 @@ class VerseMaker:
         currVerseNum = -1
         for verse in verseList:
             for line in verse:
-                # Assumes verse numbers increments by 1
+                # Assumes each verse begins with a verse number
                 if (line[0].isnumeric()):
                     numEndIndex = line.find(" ")
                     nextVerseNum = int(line[0:numEndIndex])
                     if (numEndIndex != -1 and (currVerseNum < 0 or currVerseNum + 1 == nextVerseNum)):
-                        ssIndexList.append([index, numEndIndex + index])
+                        ssIndexList.append([SSType.VerseNumber, index, numEndIndex + index])
                         currVerseNum = nextVerseNum
+                else:
+                    ssAlignmentSpace = self._getSSAlignmentSpace(len(str(currVerseNum)))
+                    if (ssAlignmentSpace > 0):
+                        ssIndexList.append([SSType.Space, index, ssAlignmentSpace + index])
 
                 index += len(line)
 
@@ -189,7 +212,8 @@ class VerseMaker:
         verseNumberList = []
         verseList = []
 
-        # Clean up empty spaces and new lines
+        # Clean up empty spaces, new lines, and headers
+        verses = re.sub("\n\n\n.*?\n\n", "-", verses)  # Remove sub-chapter headers
         verses = " ".join(verses.split())
 
         # Iterate verses by search for "[" and "]"
@@ -211,10 +235,20 @@ class VerseMaker:
 
         return [verseList, verseNumberList]
 
+    def _getSSAlignmentSpace(self, ssCharLength):
+        # Number of converted spaces need to align line with verse number and lines without;
+        # assumes bible verse number does not exceed 3 digits
+        if (ssCharLength == 3 or ssCharLength == 2):
+            return 1
+        elif (ssCharLength == 1):
+            return 2
+        else:
+            return 0
 
 # ==============================================================================================
 # ============================================ TESTER ==========================================
 # ==============================================================================================
+
 
 if __name__ == '__main__':
     # python VerseMaker.py [type] [verse source]
@@ -248,10 +282,13 @@ if __name__ == '__main__':
 
             # getVerseStringMultiSlide() Test
             print("\n\n===========================================================\n")
+            slideIndex = 0
             [title, slideVersesList, ssIndexList] = vm.getVerseStringMultiSlide(int(config["SERMON_VERSE_PROPERTIES"]["SermonVerseMaxLines"]))
             numOfVerses = len(slideVersesList)
             print("\n---------------" + title + "---------------")
             for i in range(numOfVerses):
+                print(ssIndexList[slideIndex])
+                slideIndex += 1
                 if (i != numOfVerses - 1):
                     print(slideVersesList[i], end="")
                     print("\n---------------" + "".join("-" for _ in range(len(title))) + "---------------")

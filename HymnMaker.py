@@ -3,13 +3,11 @@ import math
 import re
 import sys
 
-from lyrics_extractor import lyrics
-
 from WebLookupTools import WebLookupTools
 
 '''
 Looks up inputted title and generates formatted hymn slide texts.
-Please run validate() before getContent().
+Please run setSource() before getContent().
 
 titleList - list of title text corresponding to the order in lyricsList
 lyricsList - list of formatted verses

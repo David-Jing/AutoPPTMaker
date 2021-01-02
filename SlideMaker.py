@@ -8,6 +8,7 @@ from HymnMaker import HymnMaker
 from PPTEditorTools import PPTEditorTools
 from PPTEditorTools import DateFormatMode
 from VerseMaker import VerseMaker
+from VerseMaker import SSType
 
 
 class PPTMode(Enum):
@@ -241,9 +242,9 @@ class SlideMaker:
                         alignment=self.config[propertyName][dataNameHeader + "Alignment"])
 
                     for ssRange in ssIndexList:
-                        self.pptEditor.setTextSuperScript(item[0], ssRange[0], ssRange[1])
-                        if (ssRange[0] > 0):  # No need for paragraph spacing in initial line
-                            self.pptEditor.setSpaceAbove(item[0], ssRange[0], 10)
+                        self.pptEditor.setTextSuperScript(item[0], ssRange[1], ssRange[2])
+                        if (ssRange[1] > 0 and ssRange[0] == SSType.VerseNumber):  # No need for paragraph spacing in initial line
+                            self.pptEditor.setSpaceAbove(item[0], ssRange[1], 10)
         except:
             print(f"\tERROR: {os.system.exc_info()[0]}")
             return False
@@ -302,9 +303,9 @@ class SlideMaker:
                             alignment=self.config[propertyName][dataNameHeader + "Alignment"])
 
                         for ssRange in slideSSIndexList[i - slideIndex]:
-                            self.pptEditor.setTextSuperScript(item[0], ssRange[0], ssRange[1])
-                            if (ssRange[0] > 0):  # No need for paragraph spacing in initial line
-                                self.pptEditor.setSpaceAbove(item[0], ssRange[0], 10)
+                            self.pptEditor.setTextSuperScript(item[0], ssRange[1], ssRange[2])
+                            if (ssRange[1] > 0 and ssRange[0] == SSType.VerseNumber):  # No need for paragraph spacing in initial line
+                                self.pptEditor.setSpaceAbove(item[0], ssRange[1], 10)
             except:
                 print(f"\tERROR: {os.system.exc_info()[0]}")
                 return False
