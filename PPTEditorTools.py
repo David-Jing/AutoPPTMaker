@@ -126,13 +126,20 @@ class PPTEditorTools:
                                                   "objectIds": {slideObjectID: newSlideObjectID}}})
 
     # ==========================================================================================
-    # =================================== SLIDE DATA SETTERS ===================================
+    # ================================= SLIDE FORMAT SETTERS ===================================
     # ==========================================================================================
 
     def setText(self, objectID, newText):
         # Delete existing text and insert new
         self.requests.append({"deleteText": {"objectId": objectID}})
         self.requests.append({"insertText": {"objectId": objectID, "text": newText}})
+
+    def setBold(self, objectID, startIndex, endIndex):
+        # Set bold to a select range of text
+        self.requests.append({"updateTextStyle": {"objectId": objectID,
+                                                  "textRange": {"type": "FIXED_RANGE", "startIndex": startIndex, "endIndex": endIndex},
+                                                  "style": {"bold": True},
+                                                  "fields": "bold"}})
 
     def setTextStyle(self, objectID, bold, italic, underline, size):
         # Sets bold, italic, or underline to "True" or "False" to enable or disable; also the entire object's font size.
@@ -161,14 +168,15 @@ class PPTEditorTools:
                                                        "fields": "spaceAbove"}})
 
     # ==========================================================================================
-    # =================================== SLIDE DATA UPDATERS ==================================
+    # ================================= SLIDE FORMAT UPDATERS ==================================
     # ==========================================================================================
 
     def updatePageElementTransform(self, objectID, scaleX=1, scaleY=1, translateX=0, translateY=0):
         # Horizontally and vertically scale or translate slide objects
         self.requests.append({"updatePageElementTransform": {"objectId": objectID,
                                                              "applyMode": "RELATIVE",
-                                                             "transform": {"scaleX": scaleX, "scaleY": scaleY, "translateX": translateX, "translateY": translateY, "unit": "EMU"}}})
+                                                             "transform": {"scaleX": scaleX, "scaleY": scaleY,
+                                                                           "translateX": translateX, "translateY": translateY, "unit": "EMU"}}})
 
     # ==========================================================================================
     # ====================================== MISC GETTERS ======================================

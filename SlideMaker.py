@@ -3,12 +3,15 @@ import os
 import sys
 import time
 
-from enum import Enum
+
 from HymnMaker import HymnMaker
-from PPTEditorTools import PPTEditorTools
 from PPTEditorTools import DateFormatMode
-from VerseMaker import VerseMaker
+from PPTEditorTools import PPTEditorTools
 from VerseMaker import SSType
+from VerseMaker import VerseMaker
+from enum import Enum
+from matplotlib import rcParams
+from matplotlib.afm import AFM
 
 
 class PPTMode(Enum):
@@ -18,6 +21,18 @@ class PPTMode(Enum):
 
 
 class SlideMaker:
+    def __init__(self):
+        # Offset for when creating new slides
+        self.slideOffset = 0
+
+        # Access slide input data
+        self.input = configparser.ConfigParser()
+        self.input.read("SlideInputs.ini")
+
+        # For finding visual lengths of text strings
+        afm_filename = os.path.join(rcParams['datapath'], 'fonts', 'afm', 'ptmr8a.afm')
+        self.afm = AFM(open(afm_filename, "rb"))
+
     def setType(self, type):
         if (type == PPTMode.Stream):
             type = "Stream"
@@ -33,19 +48,15 @@ class SlideMaker:
         self.verseMaker = VerseMaker(type)
         self.hymnMaker = HymnMaker(type)
 
-        # Offset for when creating new slides
-        self.slideOffset = 0
-
         # Access slide property data
         self.config = configparser.ConfigParser()
         self.config.read(type + "SlideProperties.ini")
 
-        # Access slide input data
-        self.input = configparser.ConfigParser()
-        self.input.read("SlideInputs.ini")
+        # General linespacing for all slides
+        self.lineSpacing = self.config["SLIDE_PROPERTIES"]["SlideLineSpacing"]
 
     # ======================================================================================================
-    # ========================================== SLIDE MAKER ===============================================
+    # ========================================== SLIDE MAKERS ==============================================
     # ======================================================================================================
 
     def sundayServiceSlide(self):
@@ -113,7 +124,7 @@ class SlideMaker:
         return self._hymnSlide(hymnSource, hymnIndex)
 
     # ======================================================================================================
-    # ======================================= GENERIC SLIDE MAKER ==========================================
+    # ===================================== SLIDE MAKER IMPLEMENTATIONS ====================================
     # ======================================================================================================
 
     def _titleSlide(self, title, propertyName, dataNameHeader):
@@ -133,11 +144,11 @@ class SlideMaker:
                         italic=self.config[propertyName][dataNameHeader + "TitleItalicized"],
                         underlined=self.config[propertyName][dataNameHeader + "TitleUnderlined"],
                         alignment=self.config[propertyName][dataNameHeader + "TitleAlignment"])
-                elif '{Date}' in item[1]:
+                elif '{Text}' in item[1]:
                     checkPoint[1] = True
                     self._insertText(
                         objectID=item[0],
-                        text=dateString,
+                        text=dateString[:-5] + "," + dateString[-5:],   # Add comma between year and date
                         size=int(self.config[propertyName][dataNameHeader + "DateTextSize"]),
                         bold=self.config[propertyName][dataNameHeader + "DateBolded"],
                         italic=self.config[propertyName][dataNameHeader + "DateItalicized"],
@@ -163,14 +174,21 @@ class SlideMaker:
         [titleList, lyricsList] = self.hymnMaker.getContent()
 
         # Title font size adjustments and decide if the lyrics text box needs to be shifted
-        titleSize = int(self.config["HYMN_PROPERTIES"]["HymnTitleTextSize"])
-        maxCharLength = int(self.config["HYMN_PROPERTIES"]["HymnTitleMaxChar"])
+        titleFontSize = int(self.config["HYMN_PROPERTIES"]["HymnTitleTextSize"])
+        maxCharUnitLength = int(self.config["HYMN_PROPERTIES"]["HymnTitleMaxUnitLength"])
+        titleLength = self._getVisualLength(titleList[0])
         multiLineTitle = False
-        if (len(titleList[0]) > maxCharLength):                         # Heuristic : Shift the lyrics text block down for better aesthetics for multi-line titles
+        if (titleLength > maxCharUnitLength):                                    # Heuristic : Shift the lyrics text block down for better aesthetics for multi-line titles
             multiLineTitle = True
-            firstLineLength = titleList[0].rfind(" ", 0, maxCharLength)
-            if (len(titleList[0]) - firstLineLength > firstLineLength):  # Heuristic : It's better when there're more text in the first line than second
-                titleSize = int(self.config["HYMN_PROPERTIES"]["HymnTitleMultiLineTextSize"])
+            if ((titleLength - maxCharUnitLength > maxCharUnitLength)):          # Heuristic : It's better when there're more text in the first line than second
+                print(f"  MULTILINE FORMAT 1 : {titleLength} < {maxCharUnitLength}")
+                titleFontSize = int(self.config["HYMN_PROPERTIES"]["HymnTitleMultiLineTextSize"])
+            elif((titleLength - maxCharUnitLength) < maxCharUnitLength * 0.1):   # Heuristic : It looks terrible when's only a tiny bit of text on the 2nd line, reduce to one line
+                print(f"  MULTILINE FORMAT 2 : {titleLength} - {maxCharUnitLength} < {maxCharUnitLength * 0.1}")
+                titleFontSize = int(self.config["HYMN_PROPERTIES"]["HymnTitleMultiLineTextSize"])
+                multiLineTitle = False
+            else:
+                print(f"  MULTILINE FORMAT DEFAULT")
 
         # Generate create duplicate request and commit it
         sourceSlideID = self.pptEditor.getSlideID(slideIndex)
@@ -193,12 +211,12 @@ class SlideMaker:
                         self._insertText(
                             objectID=item[0],
                             text=titleList[i - slideIndex],
-                            size=titleSize,
+                            size=titleFontSize,
                             bold=self.config["HYMN_PROPERTIES"]["HymnTitleBolded"],
                             italic=self.config["HYMN_PROPERTIES"]["HymnTitleItalicized"],
                             underlined=self.config["HYMN_PROPERTIES"]["HymnTitleUnderlined"],
                             alignment=self.config["HYMN_PROPERTIES"]["HymnTitleAlignment"])
-                    elif ('{Lyrics}' in item[1]):
+                    elif ('{Text}' in item[1]):
                         checkPoint[1] = True
                         self._insertText(
                             objectID=item[0],
@@ -210,7 +228,7 @@ class SlideMaker:
                             alignment=self.config["HYMN_PROPERTIES"]["HymnAlignment"])
 
                         if (multiLineTitle):
-                            self.pptEditor.updatePageElementTransform(item[0], translateY=int(self.config["HYMN_PROPERTIES"]["HymnLoweredHeightAmount"]))
+                            self.pptEditor.updatePageElementTransform(item[0], translateY=int(self.config["HYMN_PROPERTIES"]["HymnLoweredUnitHeight"]))
             except:
                 print(f"\tERROR: {os.system.exc_info()[0]}")
                 return False
@@ -243,7 +261,7 @@ class SlideMaker:
                         italic=self.config[propertyName][dataNameHeader + "TitleItalicized"],
                         underlined=self.config[propertyName][dataNameHeader + "TitleUnderlined"],
                         alignment=self.config[propertyName][dataNameHeader + "TitleAlignment"])
-                elif '{Verse}' in item[1]:
+                elif '{Text}' in item[1]:
                     checkPoint[1] = True
                     self._insertText(
                         objectID=item[0],
@@ -254,8 +272,10 @@ class SlideMaker:
                         underlined=self.config[propertyName][dataNameHeader + "Underlined"],
                         alignment=self.config[propertyName][dataNameHeader + "Alignment"])
 
+                    # Superscript and bold the verse numbers, and set paragraph spacing between the verses
                     for ssRange in ssIndexList:
                         self.pptEditor.setTextSuperScript(item[0], ssRange[1], ssRange[2])
+                        self.pptEditor.setBold(item[0], ssRange[1], ssRange[2])
                         if (ssRange[1] > 0 and ssRange[0] == SSType.VerseNumber):  # No need for paragraph spacing in initial line
                             self.pptEditor.setSpaceAbove(item[0], ssRange[1], 10)
         except:
@@ -288,6 +308,9 @@ class SlideMaker:
         # Update offset
         self.slideOffset += len(slideVersesList) - 1
 
+        # Get units of paragraph that separates verse numbers
+        paragraphSpace = self.config["VERSE_PROPERTIES"]["VerseParagraphSpace"]
+
         # Insert title and verses data
         for i in range(slideIndex, slideIndex + len(slideVersesList)):
             checkPoint = [False, False]
@@ -304,7 +327,7 @@ class SlideMaker:
                             italic=self.config[propertyName][dataNameHeader + "TitleItalicized"],
                             underlined=self.config[propertyName][dataNameHeader + "TitleUnderlined"],
                             alignment=self.config[propertyName][dataNameHeader + "TitleAlignment"])
-                    elif '{Verse}' in item[1]:
+                    elif '{Text}' in item[1]:
                         checkPoint[1] = True
                         self._insertText(
                             objectID=item[0],
@@ -315,10 +338,12 @@ class SlideMaker:
                             underlined=self.config[propertyName][dataNameHeader + "Underlined"],
                             alignment=self.config[propertyName][dataNameHeader + "Alignment"])
 
+                        # Superscript and bold the verse numbers, and set paragraph spacing between the verses
                         for ssRange in slideSSIndexList[i - slideIndex]:
                             self.pptEditor.setTextSuperScript(item[0], ssRange[1], ssRange[2])
+                            self.pptEditor.setBold(item[0], ssRange[1], ssRange[2])
                             if (ssRange[1] > 0 and ssRange[0] == SSType.VerseNumber):  # No need for paragraph spacing in initial line
-                                self.pptEditor.setSpaceAbove(item[0], ssRange[1], 10)
+                                self.pptEditor.setSpaceAbove(item[0], ssRange[1], paragraphSpace)
             except:
                 print(f"\tERROR: {os.system.exc_info()[0]}")
                 return False
@@ -344,7 +369,7 @@ class SlideMaker:
                         italic=self.config[propertyName][dataNameHeader + "TitleItalicized"],
                         underlined=self.config[propertyName][dataNameHeader + "TitleUnderlined"],
                         alignment=self.config[propertyName][dataNameHeader + "TitleAlignment"])
-                elif '{Speaker}' in item[1]:
+                elif '{Text}' in item[1]:
                     checkPoint[1] = True
                     self._insertText(
                         objectID=item[0],
@@ -371,10 +396,14 @@ class SlideMaker:
     def openSlideInBrowser(self):
         self.pptEditor.openSlideInBrowser()
 
-    def _insertText(self, objectID, text, size, bold, italic, underlined, alignment, linespacing=110):
+    def _insertText(self, objectID, text, size, bold, italic, underlined, alignment, linespacing=-1):
         self.pptEditor.setText(objectID, text)
         self.pptEditor.setTextStyle(objectID, bold, italic, underlined, size)
-        self.pptEditor.setParagraphStyle(objectID, linespacing, alignment)
+        self.pptEditor.setParagraphStyle(objectID, self.lineSpacing if linespacing < 0 else linespacing, alignment)
+
+    def _getVisualLength(self, text):
+        # A precise measurement to indicate if text will align or will take up multiple lines
+        return int(self.afm.string_width_height(text)[0])
 
 
 if __name__ == '__main__':
@@ -386,6 +415,9 @@ if __name__ == '__main__':
             type = PPTMode.Stream
         elif (sys.argv[1] == "-p"):
             type = PPTMode.Projected
+        elif (sys.argv[1] == "-t"):
+            sm = SlideMaker()
+            print(f"String Visual Length = {sm._getVisualLength(' '.join(sys.argv[2:]))} Units")
 
     if (type != -1):
         print(f"INITIALIZING...")
