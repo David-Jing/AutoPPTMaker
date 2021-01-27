@@ -1,10 +1,13 @@
 import configparser
+import os
 import re
 import sys
 import math
 
 from enum import Enum
 from WebLookupTools import WebLookupTools
+from matplotlib import rcParams
+from matplotlib.afm import AFM
 
 '''
 Looks up inputted biblical verse and generates formatted verse slide texts.
@@ -36,15 +39,19 @@ class VerseMaker:
         config = configparser.ConfigParser()
         config.read(type + "SlideProperties.ini")
 
-        self.maxChar = -1
+        self.maxLineLength = 0
         self.indentSpace = int(config["VERSE_PROPERTIES"]["VerseIndentSpace"])
 
-    def setSource(self, verseSource, maxChar):
+        # For finding visual lengths of text strings
+        afm_filename = os.path.join(rcParams['datapath'], 'fonts', 'afm', 'ptmr8a.afm')
+        self.afm = AFM(open(afm_filename, "rb"))
+
+    def setSource(self, verseSource, maxLineLength):
         # Returns true if source is valid, false otherwise
         if (verseSource == ""):
             return False
 
-        self.maxChar = maxChar
+        self.maxLineLength = maxLineLength
         self.verseSource = verseSource
         self.verses = WebLookupTools.getVerse(self.verseSource)
 
@@ -78,8 +85,8 @@ class VerseMaker:
 
         # Appends title after verse
         title = "—" + title.capitalize()
-        sourceIndentSpace = int(1.5*self.maxChar) - len(title)
-        titleIndent = "".join(" " for i in range(sourceIndentSpace if sourceIndentSpace > 0 else 0))
+        sourceIndentSpace = int(0.93*self.maxLineLength/250) - len(title)          # Heuristic : It looks better if text is not right against the right wall (space, " ", is 250 units wide)
+        titleIndent = "".join(" " for _ in range(sourceIndentSpace if sourceIndentSpace > 0 else 0))
         verseString += "\n" + titleIndent + title + "\n"
 
         return [verseString, ssIndexList]
@@ -155,26 +162,33 @@ class VerseMaker:
             # Split verse into separate lines that are within the character limit
             verseLines = []
             leftIndex = 0
-            rightIndex = self.maxChar
+            rightIndex = self._getRightMostMaxIndex(verseList[i])
 
             # Iteratively cut string into lengths less than maximum
             while (rightIndex < len(verseList[i])):
+                # Find " " character left of the maxLineLength Index
                 while (verseList[i][rightIndex] != " " and rightIndex >= 0):
                     rightIndex -= 1
 
                 # Generate custom indent for line with verse numbers
-                if (leftIndex == 0):
-                    customIndentSpaces = self.indentSpace - len(numberList[i]) - 1
+                if (leftIndex < 1):
+                    customIndentSpaces = self.indentSpace - len(numberList[i])
                     customIndent = "".join(" " for _ in range(customIndentSpaces if customIndentSpaces > 0 else 0))
                     verseLines.append(numberList[i] + customIndent + verseList[i][leftIndex:rightIndex] + "\n")
                 else:
                     verseLines.append(indent + verseList[i][leftIndex:rightIndex] + "\n")
 
-                leftIndex = rightIndex + 1
-                rightIndex += self.maxChar
+                leftIndex = rightIndex
+                rightIndex += self._getRightMostMaxIndex(verseList[i][leftIndex:]) + 1
 
             # Append the remaining verses and add to list of formatted verses
-            verseLines.append(indent + verseList[i][leftIndex:] + "\n")
+            if (leftIndex < 1):
+                customIndentSpaces = self.indentSpace - len(numberList[i])
+                customIndent = "".join(" " for _ in range(customIndentSpaces if customIndentSpaces > 0 else 0))
+                verseLines.append(numberList[i] + customIndent + verseList[i][leftIndex:rightIndex] + "\n")
+            else:
+                verseLines.append(indent + verseList[i][leftIndex:] + "\n")
+
             formatedVerses.append(verseLines)
 
         return formatedVerses
@@ -207,13 +221,36 @@ class VerseMaker:
     # =========================================== TOOLS ============================================
     # ==============================================================================================
 
+    def _getRightMostMaxIndex(self, verse):
+        # Based on the max line unit length, find the rightmost character that is within the length
+        leftIndex = 0
+        rightIndex = len(verse)
+
+        if (self._getVisualLength(verse) <= self.maxLineLength):
+            return rightIndex
+
+        # Iteratively narrow down the index position
+        while(leftIndex + 1 < rightIndex):
+            middleIndex = int((leftIndex + rightIndex) / 2)
+            currUnitLineLength = self._getVisualLength(verse[:middleIndex])
+            if (currUnitLineLength > self.maxLineLength):
+                rightIndex = middleIndex
+            else:
+                leftIndex = middleIndex
+
+        return leftIndex
+
+    def _getVisualLength(self, text):
+        # A precise measurement to indicate if text will align or will take up multiple lines
+        text = ''.join([i if ord(i) < 128 else ' ' for i in text])  # Replace all non-ascii characters
+        return int(self.afm.string_width_height(text)[0])
+
     def _getVerseComponents(self, verses):
         # Split multiple verses into individuals
         verseNumberList = []
         verseList = []
 
         # Clean up empty spaces, new lines, and headers
-        verses = re.sub("\n\s+\n\s+\n.+?\n\n", "", verses)  # Remove sub-chapter headers
         verses = " ".join(verses.split())
 
         # Iterate verses by search for "[" and "]"
@@ -223,10 +260,10 @@ class VerseMaker:
             currIndex = verses.find("[", currIndex)
 
             if (currIndex > prevIndex):
-                verseList.append(verses[prevIndex:currIndex].rstrip().lstrip())
+                verseList.append(verses[prevIndex:currIndex].strip())
 
             if (currIndex < 0):
-                verseList.append(verses[prevIndex:].rstrip().lstrip())
+                verseList.append(verses[prevIndex:].strip())
                 break
 
             currIndex += 1
@@ -267,7 +304,7 @@ if __name__ == '__main__':
         config = configparser.ConfigParser()
         config.read(type + "SlideProperties.ini")
 
-        if (vm.setSource(' '.join(sys.argv[2:]), int(config["SERMON_VERSE_PROPERTIES"]["SermonVerseCharPerLine"]))):
+        if (vm.setSource(' '.join(sys.argv[2:]), int(config["SERMON_VERSE_PROPERTIES"]["SermonVerseMaxLineLength"]))):
             # GetContent() Test
             [title, verseList, ssIndexList] = vm.getContent()
             print("\n---------------" + title + "---------------")

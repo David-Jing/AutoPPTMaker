@@ -58,6 +58,9 @@ class HymnMaker:
         # Split by lyrics into its verses
         lyrics = lyrics.split("\n\n")
 
+        # Remove duplicate verses
+        lyrics = self._removeRepeatedAdjacentVerses(lyrics)
+
         # Count number of lines per verse
         lineCountList = []
         for i in range(len(lyrics)):
@@ -85,7 +88,7 @@ class HymnMaker:
                 # Check if the verse is repeated, use '(x2)' to indicate repeat instead
                 coreVerse = self._getPrincipalPeriod(verse)
                 if (coreVerse != ""):
-                    lyricsList.append(coreVerse[:-1] + f" (x2)\n")
+                    lyricsList.append(coreVerse[:-1] + f" (x{verse.count(coreVerse)})\n")
                 else:
                     lyricsList.append(verse)
 
@@ -121,6 +124,14 @@ class HymnMaker:
             else:
                 lyricsList.append(newVerse)
 
+    def _removeRepeatedAdjacentVerses(self, lyricsList):
+        for i in range(len(lyricsList) - 2):
+            if lyricsList[i] == lyricsList[i + 1]:
+                lyricsList[i + 1] += " (x2)"
+                lyricsList.pop(i)
+
+        return lyricsList
+
     # ==============================================================================================
     # =========================================== TOOLS ============================================
     # ==============================================================================================
@@ -147,7 +158,7 @@ class HymnMaker:
         verse = verse if index <= 0 else verse[index:]
 
         # Remove new lines before and after text
-        return verse.rstrip().lstrip() + "\n"
+        return verse.strip() + "\n"
 
 # ==============================================================================================
 # ============================================ TESTER ==========================================

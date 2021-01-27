@@ -76,13 +76,14 @@ class PPTEditorTools:
 
     def commitSlideChanges(self):
         # Commit changes to slides, reset requests, and update data
+        successfulCommit = True
         if len(self.requests) > 0:
             try:
                 self.slideService.presentations().batchUpdate(
                     presentationId=self.newSlideID, body={'requests': self.requests}).execute()
             except errors.HttpError as error:
-                print(f"\tAn error occurred: {error}")
-                return False
+                print(f"\tAn error occurred on slide commit: {error}")
+                successfulCommit = False
 
         # Just in case if server doesn't update immediately
         # time.sleep(1)
@@ -91,7 +92,7 @@ class PPTEditorTools:
         self.presentation = self.slideService.presentations().get(
             presentationId=self.newSlideID).execute()
 
-        return True
+        return successfulCommit
 
     # ==========================================================================================
     # =================================== SLIDE DATA GETTERS ===================================
@@ -218,6 +219,7 @@ class PPTEditorTools:
     # ==========================================================================================
 
     def removePreviousSlides(self):
+        # Remove all previously created slides
         if (os.path.exists("SlideIDList.txt")):
             f = open("SlideIDList.txt", "r+")
             lines = f.readlines()
@@ -227,7 +229,7 @@ class PPTEditorTools:
                     # Get rid of the new line symbol in the ID
                     self.driveService.files().delete(fileId=line[:-1]).execute()
                 except errors.HttpError as error:
-                    print(f"An error occurred: {error}")
+                    print(f"An error occurred on slide removal: {error}")
 
             # Clear out the file
             f.truncate(0)
@@ -251,3 +253,4 @@ class PPTEditorTools:
 
 if __name__ == '__main__':
     pe = PPTEditorTools('Stream')
+    print(pe.presentation.get('slides')[20]['pageElements'])

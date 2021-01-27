@@ -3,7 +3,6 @@ import os
 import sys
 import time
 
-
 from HymnMaker import HymnMaker
 from PPTEditorTools import DateFormatMode
 from PPTEditorTools import PPTEditorTools
@@ -67,28 +66,26 @@ class SlideMaker:
     def monthlyScriptureSlide(self):
         title = self.input["MONTHLY_SCRIPTURE"]["MonthlyScriptureTitle"].upper()
         source = self.input["MONTHLY_SCRIPTURE"]["MonthlyScriptureSource"].upper()
-        charPerLine = int(self.config["MONTHLY_SCRIPTURE_PROPERTIES"]["MonthlyScriptureCharPerLine"])
+        maxLineLength = int(self.config["MONTHLY_SCRIPTURE_PROPERTIES"]["MonthlyScriptureMaxLineLength"])
 
-        return self._scriptureSingleSlide(title, source, charPerLine,
+        return self._scriptureSingleSlide(title, source, maxLineLength,
                                           "MONTHLY_SCRIPTURE_PROPERTIES", "MonthlyScripture")
 
     def announcementSlide(self):
-        '''
-        TODO
-        '''
+        title = self.input["ANNOUNCEMENTS"]["AnnouncementsTitle"].upper()
+        return self._headerOnlySlide(title, "ANNOUNCEMENTS_PROPERTIES", "Announcements")
 
     def bibleVerseMemorizationSlide(self):
         title = self.input["BIBLE_MEMORIZATION"]["BibleMemorizationTitle"].upper()
         source = self.input["BIBLE_MEMORIZATION"]["BibleMemorizationSource"].upper()
-        charPerLine = int(self.config["BIBLE_MEMORIZATION_PROPERTIES"]["BibleMemorizationCharPerLine"])
+        maxLineLength = int(self.config["BIBLE_MEMORIZATION_PROPERTIES"]["BibleMemorizationMaxLineLength"])
 
-        return self._scriptureSingleSlide(title, source, charPerLine,
+        return self._scriptureSingleSlide(title, source, maxLineLength,
                                           "BIBLE_MEMORIZATION_PROPERTIES", "BibleMemorization")
 
     def catechismSlide(self):
-        '''
-        TODO
-        '''
+        title = self.input["CATECHISM"]["CatechismTitle"].upper()
+        return self._headerOnlySlide(title, "CATECHISM_PROPERTIES", "Catechism")
 
     def worshipSlide(self):
         title = self.input["WORSHIP_HEADER"]["WorshipHeaderTitle"].upper()
@@ -97,10 +94,10 @@ class SlideMaker:
 
     def callToWorshipSlide(self):
         source = self.input["CALL_TO_WORSHIP"]["CallToWorshipSource"].upper()
-        charPerLine = int(self.config["CALL_TO_WORSHIP_PROPERTIES"]["CallToWorshipCharPerLine"])
+        maxLineLength = int(self.config["CALL_TO_WORSHIP_PROPERTIES"]["CallToWorshipMaxLineLength"])
         maxLinesPerSlide = int(self.config["CALL_TO_WORSHIP_PROPERTIES"]["CallToWorshipMaxLines"])
 
-        return self._scriptureMultiSlide(source, charPerLine, maxLinesPerSlide,
+        return self._scriptureMultiSlide(source, maxLineLength, maxLinesPerSlide,
                                          "CALL_TO_WORSHIP_PROPERTIES", "CallToWorship")
 
     def sermonHeaderSlide(self):
@@ -110,12 +107,31 @@ class SlideMaker:
         return self._sermonHeaderSlide(title, speaker, "SERMON_HEADER_PROPERTIES", "SermonHeader")
 
     def sermonVerseSlide(self):
-        source = self.input["SERMON_VERSE"]["SermonVerseSource"].upper()
-        charPerLine = int(self.config["SERMON_VERSE_PROPERTIES"]["SermonVerseCharPerLine"])
+        # Allow for multiple unique sources separated by ","
+        sources = self.input["SERMON_VERSE"]["SermonVerseSource"].upper()
+        sourceList = sources.split(",")
+        maxLineLength = int(self.config["SERMON_VERSE_PROPERTIES"]["SermonVerseMaxLineLength"])
         maxLinesPerSlide = int(self.config["SERMON_VERSE_PROPERTIES"]["SermonVerseMaxLines"])
 
-        return self._scriptureMultiSlide(source, charPerLine, maxLinesPerSlide,
-                                         "SERMON_VERSE_PROPERTIES", "SermonVerse")
+        # Generate templates for each verse source
+        slideIndex = int(self.config["SERMON_VERSE_PROPERTIES"]["SermonVerseIndex"]) + self.slideOffset
+        sourceSlideID = self.pptEditor.getSlideID(slideIndex)
+        for i in range(len(sourceList) - 1):  # Recall that the original source slide remains
+            self.pptEditor.getDuplicateSlide(
+                sourceSlideID, sourceSlideID + '_d' + str(i))
+        if (not self.pptEditor.commitSlideChanges()):
+            return False
+
+        # Iterate and generate the slides
+        output = True
+        for source in sourceList:
+            if (not self._scriptureMultiSlide(source.strip(), maxLineLength, maxLinesPerSlide, "SERMON_VERSE_PROPERTIES", "SermonVerse")
+                    and output):
+                output = False
+            self.slideOffset += 1
+        self.slideOffset -= 1
+
+        return output
 
     def hymnSlides(self, number):
         hymnSource = self.input["HYMN"][f"Hymn{number}Source"]
@@ -176,19 +192,20 @@ class SlideMaker:
         # Title font size adjustments and decide if the lyrics text box needs to be shifted
         titleFontSize = int(self.config["HYMN_PROPERTIES"]["HymnTitleTextSize"])
         maxCharUnitLength = int(self.config["HYMN_PROPERTIES"]["HymnTitleMaxUnitLength"])
+        minCharUnitLength = int(self.config["HYMN_PROPERTIES"]["HymnTitleMinUnitLength"])
         titleLength = self._getVisualLength(titleList[0])
         multiLineTitle = False
-        if (titleLength > maxCharUnitLength):                                    # Heuristic : Shift the lyrics text block down for better aesthetics for multi-line titles
+        if (titleLength > maxCharUnitLength):                                         # Heuristic : Shift the lyrics text block down for better aesthetics for multi-line titles
             multiLineTitle = True
-            if ((titleLength - maxCharUnitLength > maxCharUnitLength)):          # Heuristic : It's better when there're more text in the first line than second
-                print(f"  MULTILINE FORMAT 1 : {titleLength} < {maxCharUnitLength}")
+            if ((titleLength - maxCharUnitLength) > 1.1*maxCharUnitLength):           # Heuristic : It's better when there're more text in the first line than second
+                print(f"  MULTILINE FORMAT 1 : {titleLength} < {maxCharUnitLength} (line 2 too long)")
                 titleFontSize = int(self.config["HYMN_PROPERTIES"]["HymnTitleMultiLineTextSize"])
-            elif((titleLength - maxCharUnitLength) < maxCharUnitLength * 0.1):   # Heuristic : It looks terrible when's only a tiny bit of text on the 2nd line, reduce to one line
-                print(f"  MULTILINE FORMAT 2 : {titleLength} - {maxCharUnitLength} < {maxCharUnitLength * 0.1}")
+            elif((titleLength - maxCharUnitLength) < minCharUnitLength):               # Heuristic : It looks terrible when's only a tiny bit of text on the 2nd line, reduce to one line
+                print(f"  MULTILINE FORMAT 2 : {titleLength} - {maxCharUnitLength} < {minCharUnitLength} (line 2 too short)")
                 titleFontSize = int(self.config["HYMN_PROPERTIES"]["HymnTitleMultiLineTextSize"])
                 multiLineTitle = False
             else:
-                print(f"  MULTILINE FORMAT DEFAULT")
+                print(f"  MULTILINE FORMAT DEFAULT : {titleLength}, {maxCharUnitLength}, {minCharUnitLength}")
 
         # Generate create duplicate request and commit it
         sourceSlideID = self.pptEditor.getSlideID(slideIndex)
@@ -288,9 +305,9 @@ class SlideMaker:
 
         return self.pptEditor.commitSlideChanges()
 
-    def _scriptureMultiSlide(self, source, charPerLine, maxLinesPerSlide, propertyName, dataNameHeader):
+    def _scriptureMultiSlide(self, source, maxLineLength, maxLinesPerSlide, propertyName, dataNameHeader):
         # Assumes monthly scripture is short enough to fit in one slide
-        if (not self.verseMaker.setSource(source, charPerLine)):
+        if (not self.verseMaker.setSource(source, maxLineLength)):
             print(f"\tERROR: Verse {source} not found.")
             return False
 
@@ -389,6 +406,31 @@ class SlideMaker:
 
         return self.pptEditor.commitSlideChanges()
 
+    def _headerOnlySlide(self, title, propertyName, dataNameHeader):
+        checkPoint = [False]
+        try:
+            data = self.pptEditor.getSlideTextData(int(self.config[propertyName][dataNameHeader + "Index"]) + self.slideOffset)
+            for item in data:
+                if '{Title}' in item[1]:
+                    checkPoint[0] = True
+                    self._insertText(
+                        objectID=item[0],
+                        text=title.upper(),
+                        size=int(self.config[propertyName][dataNameHeader + "TitleTextSize"]),
+                        bold=self.config[propertyName][dataNameHeader + "TitleBolded"],
+                        italic=self.config[propertyName][dataNameHeader + "TitleItalicized"],
+                        underlined=self.config[propertyName][dataNameHeader + "TitleUnderlined"],
+                        alignment=self.config[propertyName][dataNameHeader + "TitleAlignment"])
+        except:
+            print(f"\tERROR: {os.system.exc_info()[0]}")
+            return False
+
+        if (False in checkPoint):
+            print(f"\tERROR : {checkPoint.count(True)} out of {len(checkPoint)} text placeholders found.")
+            return False
+
+        return self.pptEditor.commitSlideChanges()
+
     # ======================================================================================================
     # ============================================ TOOLS ===================================================
     # ======================================================================================================
@@ -403,6 +445,7 @@ class SlideMaker:
 
     def _getVisualLength(self, text):
         # A precise measurement to indicate if text will align or will take up multiple lines
+        text = ''.join([i if ord(i) < 128 else ' ' for i in text])  # Replace all non-ascii characters
         return int(self.afm.string_width_height(text)[0])
 
 
@@ -417,7 +460,8 @@ if __name__ == '__main__':
             type = PPTMode.Projected
         elif (sys.argv[1] == "-t"):
             sm = SlideMaker()
-            print(f"String Visual Length = {sm._getVisualLength(' '.join(sys.argv[2:]))} Units")
+            input = r' '.join(sys.argv[2:])
+            print(f"String Visual Length of '{input}' = {sm._getVisualLength(input)} Units")
 
     if (type != -1):
         print(f"INITIALIZING...")
@@ -432,7 +476,9 @@ if __name__ == '__main__':
         print(f"CREATING {type.upper()} SLIDES...")
         print("  sundayServiceSlide() : ", sm.sundayServiceSlide())
         print("  monthlyScriptureSlide() : ", sm.monthlyScriptureSlide())
+        print("  announcementSlide() : ", sm.announcementSlide())
         print("  bibleVerseMemorizationSlide() : ", sm.bibleVerseMemorizationSlide())
+        print("  catechismSlide() : ", sm.catechismSlide())
         print("  worshipSlide() : ", sm.worshipSlide())
         print("  callToWorshipSlide() : ", sm.callToWorshipSlide())
         print("  hymnSlides(1) : ", sm.hymnSlides(1))
