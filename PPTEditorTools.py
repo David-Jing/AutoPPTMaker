@@ -121,10 +121,18 @@ class PPTEditorTools:
     def getSlideID(self, index):
         return self.presentation.get('slides')[index]['objectId']
 
-    def getDuplicateSlide(self, slideObjectID, newSlideObjectID):
+    # ==========================================================================================
+    # =================================== SLIDE MODIFIERS ======================================
+    # ==========================================================================================
+
+    def duplicateSlide(self, slideObjectID, newSlideObjectID):
         # Duplicates a slide, the duplicated slide is placed right after the source. "newSlideObjectID" must be unique.
         self.requests.append({"duplicateObject": {"objectId": slideObjectID,
                                                   "objectIds": {slideObjectID: newSlideObjectID}}})
+
+    def deleteSlide(self, slideObjectID):
+        # Delete the slide with the "slideObjectID"
+        self.requests.append({"deleteObject": {"objectId": slideObjectID}})
 
     # ==========================================================================================
     # ================================= SLIDE FORMAT SETTERS ===================================

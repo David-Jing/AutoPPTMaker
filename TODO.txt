@@ -1,0 +1,8 @@
+PPT Maker
+
+- Holy communion slides
+- Intersecting verse refernces (Leviticus 5:14-6:7)
+- Editable prayer of confession
+- Capitalize scripture sources (i.e. 1 john 4:15)
+
+- Edge case: All creature of our God and King

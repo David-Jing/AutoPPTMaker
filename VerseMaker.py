@@ -84,7 +84,7 @@ class VerseMaker:
                 verseString += line
 
         # Appends title after verse
-        title = "—" + title.capitalize()
+        title = "—" + title.title()
         sourceIndentSpace = int(0.93*self.maxLineLength/250) - len(title)          # Heuristic : It looks better if text is not right against the right wall (space, " ", is 250 units wide)
         titleIndent = "".join(" " for _ in range(sourceIndentSpace if sourceIndentSpace > 0 else 0))
         verseString += "\n" + titleIndent + title + "\n"

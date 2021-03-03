@@ -100,6 +100,31 @@ class SlideMaker:
         return self._scriptureMultiSlide(source, maxLineLength, maxLinesPerSlide,
                                          "CALL_TO_WORSHIP_PROPERTIES", "CallToWorship")
 
+    def prayerOfConfessionSlide(self):
+        title = self.input["PRAYER_OF_CONFESSION"]["PrayerOfConfessionTitle"].upper()
+        source = self.input["PRAYER_OF_CONFESSION"]["PrayerOfConfessionSource"].upper()
+        maxLineLength = int(self.config["PRAYER_OF_CONFESSION_PROPERTIES"]["PrayerOfConfessionMaxLineLength"])
+
+        return self._scriptureSingleSlide(title, source, maxLineLength,
+                                          "PRAYER_OF_CONFESSION_PROPERTIES", "PrayerOfConfession")
+
+    def holyCommunionSlide(self):
+        enabled = self.input["HOLY_COMMUNION"]["HolyCommunionEnabled"].upper()
+        slideIndex = int(self.config["HOLY_COMMUNION_PROPERTIES"]["HolyCommunionIndex"]) + self.slideOffset
+        numOfSlides = int(self.config["HOLY_COMMUNION_PROPERTIES"]["HolyCommunionSlides"])
+
+        if (enabled != "TRUE"):
+            for i in range(slideIndex, slideIndex + numOfSlides):
+                sourceSlideID = self.pptEditor.getSlideID(i)
+                self.pptEditor.deleteSlide(sourceSlideID)
+
+            if (not self.pptEditor.commitSlideChanges()):
+                return False
+
+            self.slideOffset -= numOfSlides
+
+        return True
+
     def sermonHeaderSlide(self):
         title = self.input["SERMON_HEADER"]["SermonHeaderTitle"].upper()
         speaker = self.input["SERMON_HEADER"]["SermonHeaderSpeaker"]
@@ -117,7 +142,7 @@ class SlideMaker:
         slideIndex = int(self.config["SERMON_VERSE_PROPERTIES"]["SermonVerseIndex"]) + self.slideOffset
         sourceSlideID = self.pptEditor.getSlideID(slideIndex)
         for i in range(len(sourceList) - 1):  # Recall that the original source slide remains
-            self.pptEditor.getDuplicateSlide(
+            self.pptEditor.duplicateSlide(
                 sourceSlideID, sourceSlideID + '_d' + str(i))
         if (not self.pptEditor.commitSlideChanges()):
             return False
@@ -210,7 +235,7 @@ class SlideMaker:
         # Generate create duplicate request and commit it
         sourceSlideID = self.pptEditor.getSlideID(slideIndex)
         for i in range(len(titleList) - 1):  # Recall that the original source slide remains
-            self.pptEditor.getDuplicateSlide(sourceSlideID, sourceSlideID + '_d' + str(i))
+            self.pptEditor.duplicateSlide(sourceSlideID, sourceSlideID + '_d' + str(i))
         if (not self.pptEditor.commitSlideChanges()):
             return False
 
@@ -317,7 +342,7 @@ class SlideMaker:
         slideIndex = int(self.config[propertyName][dataNameHeader + "Index"]) + self.slideOffset
         sourceSlideID = self.pptEditor.getSlideID(slideIndex)
         for i in range(len(slideVersesList) - 1):  # Recall that the original source slide remains
-            self.pptEditor.getDuplicateSlide(
+            self.pptEditor.duplicateSlide(
                 sourceSlideID, sourceSlideID + '_' + str(i))
         if (not self.pptEditor.commitSlideChanges()):
             return False
@@ -482,7 +507,9 @@ if __name__ == '__main__':
         print("  worshipSlide() : ", sm.worshipSlide())
         print("  callToWorshipSlide() : ", sm.callToWorshipSlide())
         print("  hymnSlides(1) : ", sm.hymnSlides(1))
+        print("  prayerOfConfessionSlide() : ", sm.prayerOfConfessionSlide())
         print("  hymnSlides(2) : ", sm.hymnSlides(2))
+        print("  holyCommunionSlide() : ", sm.holyCommunionSlide())
         print("  sermonHeaderSlide() : ", sm.sermonHeaderSlide())
         print("  sermonVerseSlide() : ", sm.sermonVerseSlide())
         print("  hymnSlides(3) : ", sm.hymnSlides(3))
