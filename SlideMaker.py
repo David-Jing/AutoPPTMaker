@@ -2,6 +2,7 @@ import configparser
 import os
 import sys
 import time
+import matplotlib
 
 from HymnMaker import HymnMaker
 from PPTEditorTools import DateFormatMode
@@ -9,7 +10,6 @@ from PPTEditorTools import PPTEditorTools
 from VerseMaker import SSType
 from VerseMaker import VerseMaker
 from enum import Enum
-from matplotlib import rcParams
 from matplotlib.afm import AFM
 
 
@@ -17,6 +17,7 @@ class PPTMode(Enum):
     # Specifies the PPT output format
     Stream = 0
     Projected = 1
+    Regular = 2
 
 
 class SlideMaker:
@@ -29,7 +30,7 @@ class SlideMaker:
         self.input.read("SlideInputs.ini")
 
         # For finding visual lengths of text strings
-        afm_filename = os.path.join(rcParams['datapath'], 'fonts', 'afm', 'ptmr8a.afm')
+        afm_filename = os.path.join(matplotlib.get_data_path(), 'fonts', 'afm', 'ptmr8a.afm')
         self.afm = AFM(open(afm_filename, "rb"))
 
     def setType(self, type):
@@ -37,6 +38,8 @@ class SlideMaker:
             type = "Stream"
         elif (type == PPTMode.Projected):
             type = "Projected"
+        elif (type == PPTMode.Regular):
+            type = "Regular"
         else:
             raise ValueError(f"ERROR : PPTMode not recognized.")
 
@@ -123,7 +126,7 @@ class SlideMaker:
 
             self.slideOffset -= numOfSlides
 
-        return True
+        return "Disabled"
 
     def sermonHeaderSlide(self):
         title = self.input["SERMON_HEADER"]["SermonHeaderTitle"].upper()
@@ -161,6 +164,17 @@ class SlideMaker:
     def hymnSlides(self, number):
         hymnSource = self.input["HYMN"][f"Hymn{number}Source"]
         hymnIndex = int(self.config["HYMN_PROPERTIES"][f"Hymn{number}Index"]) + self.slideOffset
+
+        if (hymnSource == ""):
+            sourceSlideID = self.pptEditor.getSlideID(hymnIndex)
+            self.pptEditor.deleteSlide(sourceSlideID)
+
+            if (not self.pptEditor.commitSlideChanges()):
+                return False
+
+            self.slideOffset -= 1
+
+            return "Disabled"
 
         return self._hymnSlide(hymnSource, hymnIndex)
 
@@ -483,6 +497,8 @@ if __name__ == '__main__':
             type = PPTMode.Stream
         elif (sys.argv[1] == "-p"):
             type = PPTMode.Projected
+        elif (sys.argv[1] == "-r"):
+            type = PPTMode.Regular
         elif (sys.argv[1] == "-t"):
             sm = SlideMaker()
             input = r' '.join(sys.argv[2:])
@@ -493,10 +509,13 @@ if __name__ == '__main__':
         sm = SlideMaker()
 
         sm.setType(type)
+
         if (type == PPTMode.Stream):
             type = "Stream"
         elif (type == PPTMode.Projected):
             type = "Projected"
+        elif (type == PPTMode.Regular):
+            type = "Regular"
 
         print(f"CREATING {type.upper()} SLIDES...")
         print("  sundayServiceSlide() : ", sm.sundayServiceSlide())
@@ -513,6 +532,7 @@ if __name__ == '__main__':
         print("  sermonHeaderSlide() : ", sm.sermonHeaderSlide())
         print("  sermonVerseSlide() : ", sm.sermonVerseSlide())
         print("  hymnSlides(3) : ", sm.hymnSlides(3))
+        print("  hymnSlides(4) : ", sm.hymnSlides(4))
 
         print(f"OPENING {type.upper()} SLIDES...")
         sm.openSlideInBrowser()

@@ -85,9 +85,6 @@ class PPTEditorTools:
                 print(f"\tAn error occurred on slide commit: {error}")
                 successfulCommit = False
 
-        # Just in case if server doesn't update immediately
-        # time.sleep(1)
-
         self.requests = []
         self.presentation = self.slideService.presentations().get(
             presentationId=self.newSlideID).execute()
@@ -210,7 +207,10 @@ class PPTEditorTools:
             day = day[1]
 
         lastNum = day[len(day) - 1]
-        ordinal = 'st' if lastNum == '1' else 'nd' if lastNum == '2' else 'rd' if lastNum == '3' else 'th'
+        if len(day) > 1 and day[0] != '1':
+            ordinal = 'st' if lastNum == '1' else 'nd' if lastNum == '2' else 'rd' if lastNum == '3' else 'th'
+        else:
+            ordinal = 'th'
         return [f'{month} {day}{ordinal} {year}', len(month) + len(day) + 1]  # Return string and index of the ordinal for superscripting
 
     def getUpcomingSlideTitle(self, type):

@@ -74,17 +74,19 @@ class HymnMaker:
                 continue
 
             appended = False
+
             '''
             # Check if the verse has too few lines
             if (verse.count("\n") < self.minLines):
                 self._formatShort(lyricsList, verse, lyrics)
                 appended = True
-s
+
             # Check if the verse has too many lines
             if (verse.count("\n") > self.maxLines):
                 self._formatLong(lyricsList, verse)
                 appended = True
             '''
+
             if (not appended):
                 # Check if the verse is repeated, use '(x2)' to indicate repeat instead
                 coreVerse = self._getPrincipalPeriod(verse)
@@ -174,6 +176,8 @@ if __name__ == '__main__':
             type = "Stream"
         elif (sys.argv[1] == "-p"):
             type = "Projected"
+        elif (sys.argv[1] == "-r"):
+            type = "Regular"
 
     if (type != ""):
         hm = HymnMaker(type)

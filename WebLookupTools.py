@@ -1,5 +1,8 @@
 import sys
 import requests
+import sys
+import os
+import lyricsgenius as lg
 from lyrics_extractor import SongLyrics
 
 
@@ -24,6 +27,32 @@ class WebLookupTools:
             pass
 
         return data
+        '''
+        # Genius API
+        # Refer to https://genius.com/api-clients for more details
+        geniusService = lg.Genius('JTVclzLeCivYMkSaeLnDY1B9bN-wVOA9yeknV2VEiWblZ0X3FWeA0tYLmDo9LT7V',  # Client access token from Genius Client API page
+                                  skip_non_songs=True, excluded_terms=["(Remix)", "(Live)"],
+                                  remove_section_headers=True)
+
+        # Block prints
+        sys.stdout = open(os.devnull, 'w')
+
+        hymn = geniusService.search_song(name)
+
+        # Restore print
+        sys.stdout = sys.__stdout__
+
+        data = {
+            'title': "Not Found",
+            'lyrics': "Not Found"
+        }
+
+        if hymn is not None:
+            data["title"] = hymn.title
+            data["lyrics"] = hymn.lyrics
+
+        return data
+        '''
 
     def getVerse(passage):
         # ESV Bible Verse Lookup ID

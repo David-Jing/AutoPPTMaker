@@ -5,8 +5,9 @@ import sys
 import math
 
 from enum import Enum
+
+import matplotlib
 from WebLookupTools import WebLookupTools
-from matplotlib import rcParams
 from matplotlib.afm import AFM
 
 '''
@@ -43,7 +44,7 @@ class VerseMaker:
         self.indentSpace = int(config["VERSE_PROPERTIES"]["VerseIndentSpace"])
 
         # For finding visual lengths of text strings
-        afm_filename = os.path.join(rcParams['datapath'], 'fonts', 'afm', 'ptmr8a.afm')
+        afm_filename = os.path.join(matplotlib.get_data_path(), 'fonts', 'afm', 'ptmr8a.afm')
         self.afm = AFM(open(afm_filename, "rb"))
 
     def setSource(self, verseSource, maxLineLength):
@@ -296,6 +297,8 @@ if __name__ == '__main__':
             type = "Stream"
         elif (sys.argv[1] == "-p"):
             type = "Projected"
+        elif (sys.argv[1] == "-r"):
+            type = "Regular"
 
     print(type)
 
