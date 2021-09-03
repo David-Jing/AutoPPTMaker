@@ -9,8 +9,8 @@ from WebLookupTools import WebLookupTools
 Looks up inputted title and generates formatted hymn slide texts.
 Please run setSource() before getContent().
 
-titleList - list of title text corresponding to the order in lyricsList
-lyricsList - list of formatted verses
+titleList - list of title text corresponding to the order in formattedLyricsList
+formattedLyricsList - list of formatted verses
 
 '''
 
@@ -28,112 +28,155 @@ class HymnMaker:
         if (hymnTitle == ""):
             return False
 
-        self.hymnTitle = hymnTitle
-        self.hymn = WebLookupTools.getHymn(self.hymnTitle)
+        self.hymn = WebLookupTools.getHymn(hymnTitle)
+        self.hymnTitle = hymnTitle if self.hymn["source"] != "SQL" else self.hymn["title"]
 
         return (self.hymn["title"] != "Not Found" and self.hymn["lyrics"] != "Not Found")
 
     def getContent(self):
         titleList = []
-        lyricsList = []
+        formattedLyricsList = []
 
         if (self.hymn != ""):
-            lyricsList = self._getFormattedLyrics(self.hymn["lyrics"])
+            formattedLyricsList = self._getFormattedLyrics(self.hymn["lyrics"])
 
             # Generate titles and numbering
-            slides = len(lyricsList)
+            slides = len(formattedLyricsList)
             for i in range(1, slides + 1):
                 titleList.append(f'{self.hymnTitle.upper()} ({i}/{slides})')
 
-        return [titleList, lyricsList]
+        return [titleList, formattedLyricsList]
 
     # ==============================================================================================
     # ========================================= FORMATTER ==========================================
     # ==============================================================================================
 
     def _getFormattedLyrics(self, lyrics):
-        # Remove [...] headers and lyrics in brackets
-        lyrics = re.sub("(\[.*?\])|(\(.*?\))", "", lyrics)
+        # Remove [...] headers and lyrics in brackets and split lyrics into its sections
+        rawLyricsList = re.sub("(\[.*?\])|(\(.*?\))", "", lyrics).split("\n\n")
 
-        # Split by lyrics into its verses
-        lyrics = lyrics.split("\n\n")
+        # Remove duplicate blocks if it is under the maximum number of lines
+        self._removeRepeatedAdjacentBlocks(rawLyricsList)
 
-        # Remove duplicate verses
-        lyrics = self._removeRepeatedAdjacentVerses(lyrics)
-
-        # Count number of lines per verse
-        lineCountList = []
-        for i in range(len(lyrics)):
-            lyrics[i] = self._cleanUpVerse(lyrics[i])
-            lineCountList.append(lyrics[i].count("\n"))
+        # Split sections into lines and remove adjacent repeated lines that occur more than 3 times
+        self._removeRepeatedLines(rawLyricsList)
 
         # Herustics for a 'well-formatted' slides
-        lyricsList = []
-        for verse in lyrics:
-            if (verse == "\n"):
+        formattedLyricsList = []
+        i = 0
+        while i < len(rawLyricsList):
+            if rawLyricsList[i] == "\n":
                 continue
 
             appended = False
 
-            '''
             # Check if the verse has too few lines
-            if (verse.count("\n") < self.minLines):
-                self._formatShort(lyricsList, verse, lyrics)
-                appended = True
+            appended = self._formatShort(formattedLyricsList, i, rawLyricsList)
+            i = i + 1 if appended else i
 
             # Check if the verse has too many lines
-            if (verse.count("\n") > self.maxLines):
-                self._formatLong(lyricsList, verse)
-                appended = True
-            '''
+            if not appended:
+                appended = self._formatLong(formattedLyricsList, i, rawLyricsList)
 
-            if (not appended):
+            if not appended:
                 # Check if the verse is repeated, use '(x2)' to indicate repeat instead
-                coreVerse = self._getPrincipalPeriod(verse)
+                coreVerse = self._getPrincipalPeriod(rawLyricsList[i])
                 if (coreVerse != ""):
-                    lyricsList.append(coreVerse[:-1] + f" (x{verse.count(coreVerse)})\n")
+                    formattedLyricsList.append(coreVerse[:-1] + f" (x{rawLyricsList[i].count(coreVerse)})\n")
                 else:
-                    lyricsList.append(verse)
+                    formattedLyricsList.append(rawLyricsList[i])
 
-        return lyricsList
+            i += 1
 
-    def _formatLong(self, lyricsList, verse):
-        # Find how many slides to split into
-        numOfSlides = math.ceil(verse.count("\n") / self.maxLines)
-        linesPerSlide = round(verse.count("\n")/numOfSlides)
+        return formattedLyricsList
 
-        # Append splitted lyrics into list
-        startIndex = 0
-        endIndex = 0
-        for _ in range(numOfSlides):
-            for _ in range(linesPerSlide):
-                endIndex = verse.find("\n", endIndex + 1)
+    def _formatLong(self, formattedLyricsList, rawLyricsIndex, rawLyricsList):
+        # Recall that the last line does not have a new line symbol
+        numOfLines = rawLyricsList[rawLyricsIndex].count("\n") + 1
 
-            endIndex += 1  # Including the new line symbol
-            lyricsList.append(verse[startIndex:endIndex])
-            startIndex = endIndex
+        if (numOfLines > self.maxLines):
+            # Find how many slides to split into
+            numOfSlides = math.ceil(numOfLines / self.maxLines)
+            linesPerSlide = round(numOfLines / numOfSlides)
 
-    def _formatShort(self, lyricsList, verse, lyrics):
+            # Append splitted lyrics into list
+            startIndex = 0
+            endIndex = 0
+            for i in range(numOfSlides):
+                for _ in range(linesPerSlide):
+                    endIndex = rawLyricsList[rawLyricsIndex].find("\n", endIndex + 1)
+
+                # Including the new line symbol or the entire remaining verses if on last slide
+                if i != numOfSlides - 1 and endIndex != -1:
+                    endIndex += 1
+                else:
+                    endIndex = len(rawLyricsList[rawLyricsIndex])
+
+                formattedLyricsList.append(rawLyricsList[rawLyricsIndex][startIndex:endIndex])
+                startIndex = endIndex
+
+            return True
+        return False
+
+    def _formatShort(self, formattedLyricsList, rawLyricsIndex, rawLyricsList):
         # Combines this verse to one from another slide
-        if (len(lyricsList) < 1):
-            lyrics[1] = verse + lyrics[1]
-        else:
-            preVerse = lyricsList.pop()
-            newVerse = preVerse + verse
+        if rawLyricsIndex < len(rawLyricsList) - 1 \
+                and rawLyricsList[rawLyricsIndex].count("\n") + rawLyricsList[rawLyricsIndex + 1].count("\n") + 3 <= self.maxLines:
+            formattedLyricsList.append(rawLyricsList[rawLyricsIndex] + "\n\n" + rawLyricsList[rawLyricsIndex + 1])
+            return True
+        return False
 
-            # Combined verses can exceed maxLines
-            if (newVerse.count("\n") > self.maxLines):
-                self._formatLong(lyricsList, newVerse)
-            else:
-                lyricsList.append(newVerse)
+    def _removeRepeatedAdjacentBlocks(self, lyricsList):
+        # Remove any repeated blocks of lyrics if under the max number of lines
+        i = 0
+        while i < len(lyricsList):
+            # Recall that the last line does not have a new line symbol
+            if lyricsList[i].count("\n") + 1 <= self.maxLines:
+                numOfRepeats = 0
 
-    def _removeRepeatedAdjacentVerses(self, lyricsList):
-        for i in range(len(lyricsList) - 2):
-            if lyricsList[i] == lyricsList[i + 1]:
-                lyricsList[i + 1] += " (x2)"
-                lyricsList.pop(i)
+                while i < len(lyricsList) - 1 and lyricsList[i] == lyricsList[i + 1]:
+                    numOfRepeats += 1
+                    i += 1
 
-        return lyricsList
+                if (numOfRepeats > 0):
+                    lyricsList[i] += f" (x{numOfRepeats + 1})"
+                    for j in range(i - numOfRepeats, i):
+                        lyricsList.pop(j)
+
+                    i -= numOfRepeats - 1
+            i += 1
+
+    def _removeRepeatedLines(self, lyricsList):
+        # Split sections into lines and remove adjacent repeated lines that occur more than 3 times
+        for i in range(len(lyricsList)):
+            lineList = lyricsList[i].split("\n")
+            lineIndex = 0
+
+            while lineIndex < len(lineList):
+                refIndex = lineIndex  # The index the line first appears in
+                numOfRepeats = 0
+
+                lineIndex += 1
+                while lineIndex < len(lineList) and lineList[lineIndex] == lineList[refIndex]:
+                    numOfRepeats += 1
+                    lineIndex += 1
+
+                # If appeared more than 3 times
+                if numOfRepeats > 2:
+                    for _ in range(numOfRepeats):
+                        lineList.pop(refIndex)
+
+                    # Append repeat tag to a single instance of the repeated line
+                    lineList[refIndex] = "\n" + lineList[refIndex] + f" (x{numOfRepeats + 1})" + "\n"
+                else:
+                    lineIndex -= numOfRepeats
+
+            # Remove any appended new line for the last line
+            if lineList[-1] == "":
+                lineList.pop(-1)
+
+            # Recombine lines
+            lyricsList[i] = "\n".join(lineList)
 
     # ==============================================================================================
     # =========================================== TOOLS ============================================
@@ -184,10 +227,10 @@ if __name__ == '__main__':
 
         if (hm.setSource(' '.join(sys.argv[2:]))):
             print(hm.hymn["title"] + "\n")
-            [titleList, lyricsList] = hm.getContent()
-            for i in range(len(lyricsList)):
+            [titleList, formattedLyricsList] = hm.getContent()
+            for i in range(len(formattedLyricsList)):
                 print("-----------" + titleList[i] + "-----------")
-                print(lyricsList[i])
+                print(formattedLyricsList[i])
 
         else:
             print("Song not found.")

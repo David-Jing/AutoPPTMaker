@@ -78,17 +78,18 @@ class SlideMaker:
         title = self.input["ANNOUNCEMENTS"]["AnnouncementsTitle"].upper()
         return self._headerOnlySlide(title, "ANNOUNCEMENTS_PROPERTIES", "Announcements")
 
-    def bibleVerseMemorizationSlide(self):
-        title = self.input["BIBLE_MEMORIZATION"]["BibleMemorizationTitle"].upper()
-        source = self.input["BIBLE_MEMORIZATION"]["BibleMemorizationSource"].upper()
+    def bibleVerseMemorizationSlide(self, nextWeek=False):
+        lastWeekString = "LastWeek" if not nextWeek else ""
+        title = self.input["BIBLE_MEMORIZATION"]["BibleMemorization" + lastWeekString + "Title"].upper()
+        source = self.input["BIBLE_MEMORIZATION"]["BibleMemorization" + lastWeekString + "Source"].upper()
         maxLineLength = int(self.config["BIBLE_MEMORIZATION_PROPERTIES"]["BibleMemorizationMaxLineLength"])
 
         return self._scriptureSingleSlide(title, source, maxLineLength,
-                                          "BIBLE_MEMORIZATION_PROPERTIES", "BibleMemorization")
+                                          "BIBLE_MEMORIZATION_PROPERTIES", "BibleMemorization", nextWeek)
 
-    def catechismSlide(self):
-        title = self.input["CATECHISM"]["CatechismTitle"].upper()
-        return self._headerOnlySlide(title, "CATECHISM_PROPERTIES", "Catechism")
+    def catechismSlide(self, nextWeek=False):
+        title = self.input["CATECHISM"]["Catechism" + ("LastWeek" if not nextWeek else "") + "Title"].upper()
+        return self._headerOnlySlide(title, "CATECHISM_PROPERTIES", "Catechism", nextWeek)
 
     def worshipSlide(self):
         title = self.input["WORSHIP_HEADER"]["WorshipHeaderTitle"].upper()
@@ -126,7 +127,9 @@ class SlideMaker:
 
             self.slideOffset -= numOfSlides
 
-        return "Disabled"
+            return "Disabled"
+
+        return True
 
     def sermonHeaderSlide(self):
         title = self.input["SERMON_HEADER"]["SermonHeaderTitle"].upper()
@@ -295,7 +298,9 @@ class SlideMaker:
 
         return self.pptEditor.commitSlideChanges()
 
-    def _scriptureSingleSlide(self, title, source, charPerLine, propertyName, dataNameHeader):
+    def _scriptureSingleSlide(self, title, source, charPerLine, propertyName, dataNameHeader, nextWeek=False):
+        nextWeekString = "NextWeek" if nextWeek else ""
+
         # Assumes monthly scripture is short enough to fit in one slide
         if (not self.verseMaker.setSource(source, charPerLine)):
             print(f"\tERROR: Verse [{source}] not found.")
@@ -305,14 +310,14 @@ class SlideMaker:
 
         checkPoint = [False, False]
         try:
-            data = self.pptEditor.getSlideTextData(int(self.config[propertyName][dataNameHeader + "Index"]) + self.slideOffset)
+            data = self.pptEditor.getSlideTextData(int(self.config[propertyName][dataNameHeader + nextWeekString + "Index"]) + self.slideOffset)
             for item in data:
                 if '{Title}' in item[1]:
                     checkPoint[0] = True
                     self._insertText(
                         objectID=item[0],
                         text=title,
-                        size=int(self.config[propertyName][dataNameHeader + "TitleTextSize"]),
+                        size=int(self.config[propertyName][dataNameHeader + nextWeekString + "TitleTextSize"]),
                         bold=self.config[propertyName][dataNameHeader + "TitleBolded"],
                         italic=self.config[propertyName][dataNameHeader + "TitleItalicized"],
                         underlined=self.config[propertyName][dataNameHeader + "TitleUnderlined"],
@@ -445,17 +450,18 @@ class SlideMaker:
 
         return self.pptEditor.commitSlideChanges()
 
-    def _headerOnlySlide(self, title, propertyName, dataNameHeader):
+    def _headerOnlySlide(self, title, propertyName, dataNameHeader, nextWeek=False):
+        nextWeekString = "NextWeek" if nextWeek else ""
         checkPoint = [False]
         try:
-            data = self.pptEditor.getSlideTextData(int(self.config[propertyName][dataNameHeader + "Index"]) + self.slideOffset)
+            data = self.pptEditor.getSlideTextData(int(self.config[propertyName][dataNameHeader + nextWeekString + "Index"]) + self.slideOffset)
             for item in data:
                 if '{Title}' in item[1]:
                     checkPoint[0] = True
                     self._insertText(
                         objectID=item[0],
                         text=title.upper(),
-                        size=int(self.config[propertyName][dataNameHeader + "TitleTextSize"]),
+                        size=int(self.config[propertyName][dataNameHeader + nextWeekString + "TitleTextSize"]),
                         bold=self.config[propertyName][dataNameHeader + "TitleBolded"],
                         italic=self.config[propertyName][dataNameHeader + "TitleItalicized"],
                         underlined=self.config[propertyName][dataNameHeader + "TitleUnderlined"],
@@ -523,6 +529,8 @@ if __name__ == '__main__':
         print("  announcementSlide() : ", sm.announcementSlide())
         print("  bibleVerseMemorizationSlide() : ", sm.bibleVerseMemorizationSlide())
         print("  catechismSlide() : ", sm.catechismSlide())
+        print("  bibleVerseMemorizationNextWeekSlide() : ", sm.bibleVerseMemorizationSlide(True))
+        print("  catechismNextWeekSlide() : ", sm.catechismSlide(True))
         print("  worshipSlide() : ", sm.worshipSlide())
         print("  callToWorshipSlide() : ", sm.callToWorshipSlide())
         print("  hymnSlides(1) : ", sm.hymnSlides(1))

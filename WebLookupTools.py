@@ -1,14 +1,38 @@
 import sys
 import requests
 import sys
-import os
-import lyricsgenius as lg
+import sqlite3
 from lyrics_extractor import SongLyrics
 
 
 class WebLookupTools:
 
     def getHymn(name):
+        start = 0
+        end = 0
+        hymnName = ""
+        lyrics = ""
+
+        con = sqlite3.connect("SQL/HymnDatabase.db")
+
+        for row in con.execute(f"SELECT * FROM Hymn WHERE HymnName LIKE \"%{name}%\" AND VERSION = 1 ORDER BY Number"):
+            hymnName = row[0]
+            start = row[2]
+            end = row[3]
+            lyrics += row[4] + ("\n\n" if start != end else "")
+
+        con.close()
+
+        if start != end:
+            print(f"ERROR: Database consistency error, {start}/{end} lyrics found.")
+        elif len(lyrics) > 0:
+            print("  LYRICS SOURCE: SQL")
+            return {
+                'source': 'SQL',
+                'title': hymnName,
+                'lyrics': lyrics
+            }
+
         # API Key and Engine ID of Google Custom Search JSON API
         # Refer to https://pypi.org/project/lyrics-extractor/ for more detail
         GCS_API_KEY = 'AIzaSyA8jw1Ws2yXn7BDqj4yYYJmE1BAK_J53zA'
@@ -17,42 +41,20 @@ class WebLookupTools:
         extract_lyrics = SongLyrics(GCS_API_KEY, GCS_ENGINE_ID)
 
         data = {
+            'source': "Web",
             'title': "Not Found",
             'lyrics': "Not Found"
         }
 
         try:
             data = extract_lyrics.get_lyrics(name)
+            data['source'] = "Web"
         except:
             pass
 
-        return data
-        '''
-        # Genius API
-        # Refer to https://genius.com/api-clients for more details
-        geniusService = lg.Genius('JTVclzLeCivYMkSaeLnDY1B9bN-wVOA9yeknV2VEiWblZ0X3FWeA0tYLmDo9LT7V',  # Client access token from Genius Client API page
-                                  skip_non_songs=True, excluded_terms=["(Remix)", "(Live)"],
-                                  remove_section_headers=True)
-
-        # Block prints
-        sys.stdout = open(os.devnull, 'w')
-
-        hymn = geniusService.search_song(name)
-
-        # Restore print
-        sys.stdout = sys.__stdout__
-
-        data = {
-            'title': "Not Found",
-            'lyrics': "Not Found"
-        }
-
-        if hymn is not None:
-            data["title"] = hymn.title
-            data["lyrics"] = hymn.lyrics
+        print("  LYRICS SOURCE: Web")
 
         return data
-        '''
 
     def getVerse(passage):
         # ESV Bible Verse Lookup ID
