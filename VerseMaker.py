@@ -1,6 +1,5 @@
 import configparser
 import os
-import re
 import sys
 import math
 
@@ -206,7 +205,8 @@ class VerseMaker:
                 if (line[0].isnumeric()):
                     numEndIndex = line.find(" ")
                     nextVerseNum = int(line[0:numEndIndex])
-                    if (numEndIndex != -1 and (currVerseNum < 0 or currVerseNum + 1 == nextVerseNum)):
+                    # Numbers either increment or reset to 1 on new chapter
+                    if (numEndIndex != -1 and (currVerseNum < 0 or currVerseNum + 1 == nextVerseNum or nextVerseNum == 1)):
                         ssIndexList.append([SSType.VerseNumber, index, numEndIndex + index])
                         currVerseNum = nextVerseNum
                 else:

@@ -1,7 +1,7 @@
 import sqlite3
 
 if __name__ == '__main__':
-	con = sqlite3.connect('HymnDatabase.db')
+	con = sqlite3.connect('../HymnDatabase.db')
 
 	f = open("Lyrics.txt", encoding="utf8")
 	lyrics = f.read()

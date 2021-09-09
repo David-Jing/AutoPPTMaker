@@ -2,8 +2,11 @@ import configparser
 import math
 import re
 import sys
+import os
 
+import matplotlib
 from WebLookupTools import WebLookupTools
+from matplotlib.afm import AFM
 
 '''
 Looks up inputted title and generates formatted hymn slide texts.
@@ -23,13 +26,18 @@ class HymnMaker:
 
         self.maxLines = int(config["HYMN_PROPERTIES"]["HymnMaxLines"])
         self.minLines = int(config["HYMN_PROPERTIES"]["HymnMinLines"])
+        self.maxLineLength = int(config["HYMN_PROPERTIES"]["HymnMaxLineUnitLength"])
+
+        # For finding visual lengths of text strings
+        afm_filename = os.path.join(matplotlib.get_data_path(), 'fonts', 'afm', 'ptmr8a.afm')
+        self.afm = AFM(open(afm_filename, "rb"))
 
     def setSource(self, hymnTitle):
         if (hymnTitle == ""):
             return False
 
+        self.hymnTitle = hymnTitle
         self.hymn = WebLookupTools.getHymn(hymnTitle)
-        self.hymnTitle = hymnTitle if self.hymn["source"] != "SQL" else self.hymn["title"]
 
         return (self.hymn["title"] != "Not Found" and self.hymn["lyrics"] != "Not Found")
 
@@ -60,6 +68,9 @@ class HymnMaker:
 
         # Split sections into lines and remove adjacent repeated lines that occur more than 3 times
         self._removeRepeatedLines(rawLyricsList)
+
+        # Split long lines
+        self._splitLongLines(rawLyricsList)
 
         # Herustics for a 'well-formatted' slides
         formattedLyricsList = []
@@ -140,8 +151,8 @@ class HymnMaker:
 
                 if (numOfRepeats > 0):
                     lyricsList[i] += f" (x{numOfRepeats + 1})"
-                    for j in range(i - numOfRepeats, i):
-                        lyricsList.pop(j)
+                    for _ in range(i - numOfRepeats, i):
+                        lyricsList.pop(i - numOfRepeats)
 
                     i -= numOfRepeats - 1
             i += 1
@@ -174,8 +185,38 @@ class HymnMaker:
             # Remove any appended new line for the last line
             if lineList[-1] == "":
                 lineList.pop(-1)
+            elif lineList[-1][-1] == "\n":
+                lineList[-1] = lineList[-1][:-1]
 
             # Recombine lines
+            lyricsList[i] = "\n".join(lineList)
+
+    def _splitLongLines(self, lyricsList):
+        # Split lyrics lines that exceed max length (split verse between 20% to 80%)
+        for i in range(len(lyricsList)):
+            lineList = lyricsList[i].split("\n")
+
+            j = 0
+            while j < len(lineList):
+                if self._getVisualLength(lineList[j]) > self.maxLineLength:
+                    splitIndex = -1
+
+                    # Split at comma
+                    splitIndex = lineList[j].rfind(",", int(2*len(lineList[j])/5), int(4*len(lineList[j])/5))
+
+                    # Or split at approximate half way
+                    splitIndex = lineList[j].rfind(" ", int(1*len(lineList[j])/3), int(2*len(lineList[j])/3)) \
+                        if splitIndex == -1 else splitIndex
+
+                    # Split into two sections
+                    if splitIndex > 0:
+                        secondLineOffset = 1 if lineList[j][splitIndex] == " " else 2
+                        lineList.insert(j + 1, lineList[j][splitIndex + secondLineOffset:])
+                        lineList[j] = lineList[j][:splitIndex + 1]
+                        j += 1
+                j += 1
+
+                # Recombine lines
             lyricsList[i] = "\n".join(lineList)
 
     # ==============================================================================================
@@ -205,6 +246,11 @@ class HymnMaker:
 
         # Remove new lines before and after text
         return verse.strip() + "\n"
+
+    def _getVisualLength(self, text):
+        # A precise measurement to indicate if text will align or will take up multiple lines
+        text = ''.join([i if ord(i) < 128 else ' ' for i in text])  # Replace all non-ascii characters
+        return int(self.afm.string_width_height(text)[0])
 
 # ==============================================================================================
 # ============================================ TESTER ==========================================

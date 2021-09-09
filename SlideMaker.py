@@ -101,6 +101,10 @@ class SlideMaker:
         maxLineLength = int(self.config["CALL_TO_WORSHIP_PROPERTIES"]["CallToWorshipMaxLineLength"])
         maxLinesPerSlide = int(self.config["CALL_TO_WORSHIP_PROPERTIES"]["CallToWorshipMaxLines"])
 
+        # Delete section if source is empty
+        if (source == ""):
+            return self._deleteSlide(int(self.config["CALL_TO_WORSHIP_PROPERTIES"]["CallToWorshipIndex"]) + self.slideOffset)
+
         return self._scriptureMultiSlide(source, maxLineLength, maxLinesPerSlide,
                                          "CALL_TO_WORSHIP_PROPERTIES", "CallToWorship")
 
@@ -108,6 +112,10 @@ class SlideMaker:
         title = self.input["PRAYER_OF_CONFESSION"]["PrayerOfConfessionTitle"].upper()
         source = self.input["PRAYER_OF_CONFESSION"]["PrayerOfConfessionSource"].upper()
         maxLineLength = int(self.config["PRAYER_OF_CONFESSION_PROPERTIES"]["PrayerOfConfessionMaxLineLength"])
+
+        # Delete section if source is empty
+        if (source == ""):
+            return self._deleteSlide(int(self.config["PRAYER_OF_CONFESSION_PROPERTIES"]["PrayerOfConfessionIndex"]) + self.slideOffset)
 
         return self._scriptureSingleSlide(title, source, maxLineLength,
                                           "PRAYER_OF_CONFESSION_PROPERTIES", "PrayerOfConfession")
@@ -117,6 +125,7 @@ class SlideMaker:
         slideIndex = int(self.config["HOLY_COMMUNION_PROPERTIES"]["HolyCommunionIndex"]) + self.slideOffset
         numOfSlides = int(self.config["HOLY_COMMUNION_PROPERTIES"]["HolyCommunionSlides"])
 
+        # If not enabled, delete section
         if (enabled != "TRUE"):
             for i in range(slideIndex, slideIndex + numOfSlides):
                 sourceSlideID = self.pptEditor.getSlideID(i)
@@ -168,16 +177,9 @@ class SlideMaker:
         hymnSource = self.input["HYMN"][f"Hymn{number}Source"]
         hymnIndex = int(self.config["HYMN_PROPERTIES"][f"Hymn{number}Index"]) + self.slideOffset
 
+        # Delete section if source is empty
         if (hymnSource == ""):
-            sourceSlideID = self.pptEditor.getSlideID(hymnIndex)
-            self.pptEditor.deleteSlide(sourceSlideID)
-
-            if (not self.pptEditor.commitSlideChanges()):
-                return False
-
-            self.slideOffset -= 1
-
-            return "Disabled"
+            return self._deleteSlide(hymnIndex)
 
         return self._hymnSlide(hymnSource, hymnIndex)
 
@@ -480,7 +482,18 @@ class SlideMaker:
     # ============================================ TOOLS ===================================================
     # ======================================================================================================
 
-    def openSlideInBrowser(self):
+    def _deleteSlide(self, slideIndex):
+        sourceSlideID = self.pptEditor.getSlideID(slideIndex)
+        self.pptEditor.deleteSlide(sourceSlideID)
+
+        if (not self.pptEditor.commitSlideChanges()):
+            return False
+
+        self.slideOffset -= 1
+
+        return "Disabled"
+
+    def _openSlideInBrowser(self):
         self.pptEditor.openSlideInBrowser()
 
     def _insertText(self, objectID, text, size, bold, italic, underlined, alignment, linespacing=-1):
@@ -495,54 +508,64 @@ class SlideMaker:
 
 
 if __name__ == '__main__':
-    start = time.time()
+    print("====================================================================")
+    print("\t\t\tSlideMaker v1.0.0")
+    print("====================================================================")
+    print("\nInput Options:\n  Stream Slides: \ts\n  Projected Slides: \tp\n  Regular Slides: \tr\n  Quit: \t\tq\n")
+    print("====================================================================\n")
 
-    type = -1
-    if (len(sys. argv) > 1):
-        if (sys.argv[1] == "-s"):
-            type = PPTMode.Stream
-        elif (sys.argv[1] == "-p"):
-            type = PPTMode.Projected
-        elif (sys.argv[1] == "-r"):
-            type = PPTMode.Regular
-        elif (sys.argv[1] == "-t"):
+    mode = ""
+    while (mode != "q"):
+        type = -1
+        mode = input("Input: ")
+        if (len(mode) > 0):
+            if (mode == "s"):
+                type = PPTMode.Stream
+            elif (mode == "p"):
+                type = PPTMode.Projected
+            elif (mode == "r"):
+                type = PPTMode.Regular
+            elif (mode == "-t"):
+                sm = SlideMaker()
+                input = r' '.join(sys.argv[2:])
+                print(f"String Visual Length of '{input}' = {sm._getVisualLength(input)} Units")
+
+        if (type != -1):
+            start = time.time()
+
+            print("\nINITIALIZING...")
             sm = SlideMaker()
-            input = r' '.join(sys.argv[2:])
-            print(f"String Visual Length of '{input}' = {sm._getVisualLength(input)} Units")
 
-    if (type != -1):
-        print(f"INITIALIZING...")
-        sm = SlideMaker()
+            sm.setType(type)
 
-        sm.setType(type)
+            if (type == PPTMode.Stream):
+                type = "Stream"
+            elif (type == PPTMode.Projected):
+                type = "Projected"
+            elif (type == PPTMode.Regular):
+                type = "Regular"
 
-        if (type == PPTMode.Stream):
-            type = "Stream"
-        elif (type == PPTMode.Projected):
-            type = "Projected"
-        elif (type == PPTMode.Regular):
-            type = "Regular"
+            print(f"CREATING {type.upper()} SLIDES...")
+            print("  sundayServiceSlide() : ", sm.sundayServiceSlide())
+            print("  monthlyScriptureSlide() : ", sm.monthlyScriptureSlide())
+            print("  announcementSlide() : ", sm.announcementSlide())
+            print("  bibleVerseMemorizationSlide() : ", sm.bibleVerseMemorizationSlide())
+            print("  catechismSlide() : ", sm.catechismSlide())
+            print("  bibleVerseMemorizationNextWeekSlide() : ", sm.bibleVerseMemorizationSlide(True))
+            print("  catechismNextWeekSlide() : ", sm.catechismSlide(True))
+            print("  worshipSlide() : ", sm.worshipSlide())
+            print("  callToWorshipSlide() : ", sm.callToWorshipSlide())
+            print("  hymnSlides(1) : ", sm.hymnSlides(1))
+            print("  prayerOfConfessionSlide() : ", sm.prayerOfConfessionSlide())
+            print("  hymnSlides(2) : ", sm.hymnSlides(2))
+            print("  holyCommunionSlide() : ", sm.holyCommunionSlide())
+            print("  sermonHeaderSlide() : ", sm.sermonHeaderSlide())
+            print("  sermonVerseSlide() : ", sm.sermonVerseSlide())
+            print("  hymnSlides(3) : ", sm.hymnSlides(3))
+            print("  hymnSlides(4) : ", sm.hymnSlides(4))
 
-        print(f"CREATING {type.upper()} SLIDES...")
-        print("  sundayServiceSlide() : ", sm.sundayServiceSlide())
-        print("  monthlyScriptureSlide() : ", sm.monthlyScriptureSlide())
-        print("  announcementSlide() : ", sm.announcementSlide())
-        print("  bibleVerseMemorizationSlide() : ", sm.bibleVerseMemorizationSlide())
-        print("  catechismSlide() : ", sm.catechismSlide())
-        print("  bibleVerseMemorizationNextWeekSlide() : ", sm.bibleVerseMemorizationSlide(True))
-        print("  catechismNextWeekSlide() : ", sm.catechismSlide(True))
-        print("  worshipSlide() : ", sm.worshipSlide())
-        print("  callToWorshipSlide() : ", sm.callToWorshipSlide())
-        print("  hymnSlides(1) : ", sm.hymnSlides(1))
-        print("  prayerOfConfessionSlide() : ", sm.prayerOfConfessionSlide())
-        print("  hymnSlides(2) : ", sm.hymnSlides(2))
-        print("  holyCommunionSlide() : ", sm.holyCommunionSlide())
-        print("  sermonHeaderSlide() : ", sm.sermonHeaderSlide())
-        print("  sermonVerseSlide() : ", sm.sermonVerseSlide())
-        print("  hymnSlides(3) : ", sm.hymnSlides(3))
-        print("  hymnSlides(4) : ", sm.hymnSlides(4))
+            print(f"OPENING {type.upper()} SLIDES...")
+            sm._openSlideInBrowser()
 
-        print(f"OPENING {type.upper()} SLIDES...")
-        sm.openSlideInBrowser()
-
-    print(f"\nTask completed in {(time.time() - start):.2f} seconds.")
+            print(f"\nTask completed in {(time.time() - start):.2f} seconds.\n")
+            print("====================================================================\n")

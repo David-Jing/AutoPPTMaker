@@ -13,13 +13,18 @@ class WebLookupTools:
         hymnName = ""
         lyrics = ""
 
-        con = sqlite3.connect("SQL/HymnDatabase.db")
+        con = sqlite3.connect("HymnDatabase.db")
 
         for row in con.execute(f"SELECT * FROM Hymn WHERE HymnName LIKE \"%{name}%\" AND VERSION = 1 ORDER BY Number"):
             hymnName = row[0]
             start = row[2]
             end = row[3]
+
             lyrics += row[4] + ("\n\n" if start != end else "")
+
+            # In case there're multiple matches
+            if start == end:
+                break
 
         con.close()
 
