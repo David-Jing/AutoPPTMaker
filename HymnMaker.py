@@ -63,6 +63,10 @@ class HymnMaker:
         # Remove [...] headers and lyrics in brackets and split lyrics into its sections
         rawLyricsList = re.sub("(\[.*?\])|(\(.*?\))", "", lyrics).split("\n\n")
 
+        # Remove starting and ending new lines
+        for i in range(len(rawLyricsList)):
+            rawLyricsList[i] = rawLyricsList[i].strip()
+
         # Remove duplicate blocks if it is under the maximum number of lines
         self._removeRepeatedAdjacentBlocks(rawLyricsList)
 
@@ -117,14 +121,16 @@ class HymnMaker:
                 for _ in range(linesPerSlide):
                     endIndex = rawLyricsList[rawLyricsIndex].find("\n", endIndex + 1)
 
-                # Including the new line symbol or the entire remaining verses if on last slide
-                if i != numOfSlides - 1 and endIndex != -1:
-                    endIndex += 1
-                else:
+                # Add the entire remaining verses if on last slide
+                if i == numOfSlides - 1 or endIndex == -1:
                     endIndex = len(rawLyricsList[rawLyricsIndex])
 
                 formattedLyricsList.append(rawLyricsList[rawLyricsIndex][startIndex:endIndex])
                 startIndex = endIndex
+
+                # Exclude new line symbols
+                if i != numOfSlides - 1 and endIndex != -1:
+                    startIndex += 1
 
             return True
         return False
@@ -204,11 +210,23 @@ class HymnMaker:
                     # Split at comma
                     splitIndex = lineList[j].rfind(",", int(2*len(lineList[j])/5), int(4*len(lineList[j])/5))
 
+                    # Or split at semicolon
+                    splitIndex = lineList[j].rfind(";", int(2*len(lineList[j])/5), int(4*len(lineList[j])/5)) \
+                        if splitIndex == -1 else splitIndex
+
+                    # Or split at exclamation point
+                    splitIndex = lineList[j].rfind("!", int(2*len(lineList[j])/5), int(4*len(lineList[j])/5)) \
+                        if splitIndex == -1 else splitIndex
+
+                    # Or split at period
+                    splitIndex = lineList[j].rfind(".", int(2*len(lineList[j])/5), int(4*len(lineList[j])/5)) \
+                        if splitIndex == -1 else splitIndex
+
                     # Or split at approximate half way
                     splitIndex = lineList[j].rfind(" ", int(1*len(lineList[j])/3), int(2*len(lineList[j])/3)) \
                         if splitIndex == -1 else splitIndex
 
-                    # Split into two sections
+                    # Split at index
                     if splitIndex > 0:
                         secondLineOffset = 1 if lineList[j][splitIndex] == " " else 2
                         lineList.insert(j + 1, lineList[j][splitIndex + secondLineOffset:])

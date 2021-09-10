@@ -301,14 +301,16 @@ class SlideMaker:
         return self.pptEditor.commitSlideChanges()
 
     def _scriptureSingleSlide(self, title, source, charPerLine, propertyName, dataNameHeader, nextWeek=False):
+        # Assumes monthly scripture is short enough to fit in one slide
         nextWeekString = "NextWeek" if nextWeek else ""
 
-        # Assumes monthly scripture is short enough to fit in one slide
-        if (not self.verseMaker.setSource(source, charPerLine)):
-            print(f"\tERROR: Verse [{source}] not found.")
-            return False
-
-        [verseString, ssIndexList] = self.verseMaker.getVerseString()
+        # Generate slide anyway if source verse cannot be found
+        if not self.verseMaker.setSource(source, charPerLine):
+            print(f"\tWARNING: Verse [{source}] not found.")
+            verseString = "{Text}"
+            ssIndexList = []
+        else:
+            [verseString, ssIndexList] = self.verseMaker.getVerseString()
 
         checkPoint = [False, False]
         try:
@@ -509,7 +511,7 @@ class SlideMaker:
 
 if __name__ == '__main__':
     print("====================================================================")
-    print("\t\t\tSlideMaker v1.0.0")
+    print("\t\t\tSlideMaker v1.0.1")
     print("====================================================================")
     print("\nInput Options:\n  Stream Slides: \ts\n  Projected Slides: \tp\n  Regular Slides: \tr\n  Quit: \t\tq\n")
     print("====================================================================\n")
