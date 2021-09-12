@@ -125,4 +125,4 @@ dmypy.json
 .pyre/
 
 # Google
-.pickle
+*.pickle
