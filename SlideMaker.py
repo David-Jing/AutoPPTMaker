@@ -12,6 +12,8 @@ from VerseMaker import VerseMaker
 from enum import Enum
 from matplotlib.afm import AFM
 
+VersionNumber = "1.0.3"
+
 
 class PPTMode(Enum):
     # Specifies the PPT output format
@@ -511,7 +513,7 @@ class SlideMaker:
 
 if __name__ == '__main__':
     print("====================================================================")
-    print("\t\t\tSlideMaker v1.0.1")
+    print(f"\t\t\tSlideMaker v{VersionNumber}")
     print("====================================================================")
     print("\nInput Options:\n  Stream Slides: \ts\n  Projected Slides: \tp\n  Regular Slides: \tr\n  Quit: \t\tq\n")
     print("====================================================================\n")
