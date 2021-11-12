@@ -2,15 +2,16 @@ from __future__ import print_function
 import configparser
 from datetime import timedelta
 import pickle
+import sys
 import os.path
 import datetime
 import webbrowser
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
 from apiclient import errors
 from enum import Enum
-
 
 class DateFormatMode(Enum):
     # Specifies the string format outputted by getFormattedNextSundayDate()
@@ -20,7 +21,7 @@ class DateFormatMode(Enum):
 
 class PPTEditorTools:
     def __init__(self, type):
-        # If modifying these scopes, delete the file token.pickle.
+        # If modifying these scopes, delete the file token.json.
         self.scope = ['https://www.googleapis.com/auth/presentations',
                       'https://www.googleapis.com/auth/drive']
 
@@ -49,14 +50,14 @@ class PPTEditorTools:
     # ======================================= API TOOLS ========================================
     # ==========================================================================================
 
-    def getAPIServices(self):
+    def getAPIServices(self):      
+        # Refer to https://developers.google.com/slides/api/quickstart/python
         creds = None
-        # The file token.pickle stores the user's access and refresh tokens, and is
+        # The file token.json stores the user's access and refresh tokens, and is
         # created automatically when the authorization flow completes for the first
         # time.
-        if os.path.exists('token.pickle'):
-            with open('token.pickle', 'rb') as token:
-                creds = pickle.load(token)
+        if os.path.exists('token.json'):
+            creds = Credentials.from_authorized_user_file('token.json', self.scope)
         # If there are no (valid) credentials available, let the user log in.
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
@@ -66,11 +67,11 @@ class PPTEditorTools:
                     'credentials.json', self.scope)
                 creds = flow.run_local_server(port=0)
             # Save the credentials for the next run
-            with open('token.pickle', 'wb') as token:
-                pickle.dump(creds, token)
+            with open('token.json', 'w') as token:
+                token.write(creds.to_json())
 
-        slideService = build('slides', 'v1', credentials=creds)
-        driveService = build('drive', 'v3', credentials=creds)
+        slideService = build('slides', 'v1', credentials=creds, static_discovery=False)
+        driveService = build('drive', 'v3', credentials=creds, static_discovery=False)
 
         return [slideService, driveService]
 
@@ -247,6 +248,7 @@ class PPTEditorTools:
         body = {
             'name': self.getUpcomingSlideTitle(type)
         }
+
         drive_response = self.driveService.files().copy(
             fileId=self.sourceSlideID, body=body).execute()
 
