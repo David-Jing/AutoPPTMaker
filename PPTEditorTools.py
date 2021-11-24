@@ -53,11 +53,11 @@ class PPTEditorTools:
     def getAPIServices(self):      
         # Refer to https://developers.google.com/slides/api/quickstart/python
         creds = None
-        # The file token.json stores the user's access and refresh tokens, and is
+        # The file token.pickle stores the user's access and refresh tokens, and is
         # created automatically when the authorization flow completes for the first
         # time.
-        if os.path.exists('token.json'):
-            creds = Credentials.from_authorized_user_file('token.json', self.scope)
+        if os.path.exists('token.pickle'):
+            creds = Credentials.from_authorized_user_file('token.pickle', self.scope)
         # If there are no (valid) credentials available, let the user log in.
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
@@ -67,11 +67,11 @@ class PPTEditorTools:
                     'credentials.json', self.scope)
                 creds = flow.run_local_server(port=0)
             # Save the credentials for the next run
-            with open('token.json', 'w') as token:
+            with open('token.pickle', 'w') as token:
                 token.write(creds.to_json())
 
-        slideService = build('slides', 'v1', credentials=creds, static_discovery=False)
-        driveService = build('drive', 'v3', credentials=creds, static_discovery=False)
+        slideService = build('slides', 'v1', credentials=creds)
+        driveService = build('drive', 'v3', credentials=creds)
 
         return [slideService, driveService]
 
