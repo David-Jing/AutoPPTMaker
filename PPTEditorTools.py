@@ -232,8 +232,8 @@ class PPTEditorTools:
 
     def removePreviousSlides(self) -> None:
         # Remove all previously created slides
-        if (os.path.exists("SlideIDList.txt")):
-            f = open("SlideIDList.txt", "r+")
+        if (os.path.exists("Data/SlideIDList.txt")):
+            f = open("Data/SlideIDList.txt", "r+")
             lines = f.readlines()
 
             for line in lines:
@@ -241,7 +241,7 @@ class PPTEditorTools:
                     # Get rid of the new line symbol in the ID
                     self.driveService.files().delete(fileId=line[:-1]).execute()
                 except errors.HttpError as error:
-                    print(f"An error occurred on slide removal: {error}")
+                    print(f"WARNING : An error occurred on slide removal: {error}")
 
             # Clear out the file
             f.truncate(0)
