@@ -7,6 +7,7 @@ import os
 import matplotlib
 from WebLookupTools import WebLookupTools
 from matplotlib.afm import AFM
+from typing import List
 
 '''
 Looks up inputted title and generates formatted hymn slide texts.
@@ -19,7 +20,7 @@ formattedLyricsList - list of formatted verses
 
 
 class HymnMaker:
-    def __init__(self, type):
+    def __init__(self, type: str) -> None:
         # Get heuristics
         config = configparser.ConfigParser()
         config.read(type + "SlideProperties.ini")
@@ -32,7 +33,7 @@ class HymnMaker:
         afm_filename = os.path.join(matplotlib.get_data_path(), 'fonts', 'afm', 'ptmr8a.afm')
         self.afm = AFM(open(afm_filename, "rb"))
 
-    def setSource(self, hymnTitle):
+    def setSource(self, hymnTitle: str) -> bool:
         if (hymnTitle == ""):
             return False
 
@@ -41,7 +42,7 @@ class HymnMaker:
 
         return (self.hymn["title"] != "Not Found" and self.hymn["lyrics"] != "Not Found")
 
-    def getContent(self):
+    def getContent(self) -> List[List[str]]:
         titleList = []
         formattedLyricsList = []
 
@@ -59,7 +60,7 @@ class HymnMaker:
     # ========================================= FORMATTER ==========================================
     # ==============================================================================================
 
-    def _getFormattedLyrics(self, lyrics):
+    def _getFormattedLyrics(self, lyrics: str) -> List[str]:
         # Remove [...] headers and lyrics in brackets and split lyrics into its sections
         rawLyricsList = re.sub("(\[.*?\])|(\(.*?\))", "", lyrics).split("\n\n")
 
@@ -77,7 +78,7 @@ class HymnMaker:
         self._splitLongLines(rawLyricsList)
 
         # Herustics for a 'well-formatted' slides
-        formattedLyricsList = []
+        formattedLyricsList: List[str] = []
         i = 0
         while i < len(rawLyricsList):
             if rawLyricsList[i] == "\n":
@@ -105,7 +106,7 @@ class HymnMaker:
 
         return formattedLyricsList
 
-    def _formatLong(self, formattedLyricsList, rawLyricsIndex, rawLyricsList):
+    def _formatLong(self, formattedLyricsList: List[str], rawLyricsIndex: int, rawLyricsList: List[str]) -> bool:
         # Recall that the last line does not have a new line symbol
         numOfLines = rawLyricsList[rawLyricsIndex].count("\n") + 1
 
@@ -135,7 +136,7 @@ class HymnMaker:
             return True
         return False
 
-    def _formatShort(self, formattedLyricsList, rawLyricsIndex, rawLyricsList):
+    def _formatShort(self, formattedLyricsList: List[str], rawLyricsIndex: int, rawLyricsList: List[str]) -> bool:
         # Combines this verse to one from another slide
         if rawLyricsIndex < len(rawLyricsList) - 1 \
                 and rawLyricsList[rawLyricsIndex].count("\n") + rawLyricsList[rawLyricsIndex + 1].count("\n") + 3 <= self.maxLines:
@@ -143,7 +144,7 @@ class HymnMaker:
             return True
         return False
 
-    def _removeRepeatedAdjacentBlocks(self, lyricsList):
+    def _removeRepeatedAdjacentBlocks(self, lyricsList: List[str]) -> None:
         # Remove any repeated blocks of lyrics if under the max number of lines
         i = 0
         while i < len(lyricsList):
@@ -163,7 +164,7 @@ class HymnMaker:
                     i -= numOfRepeats - 1
             i += 1
 
-    def _removeRepeatedLines(self, lyricsList):
+    def _removeRepeatedLines(self, lyricsList: List[str]) -> None:
         # Split sections into lines and remove adjacent repeated lines that occur more than 3 times
         for i in range(len(lyricsList)):
             lineList = lyricsList[i].split("\n")
@@ -197,7 +198,7 @@ class HymnMaker:
             # Recombine lines
             lyricsList[i] = "\n".join(lineList)
 
-    def _splitLongLines(self, lyricsList):
+    def _splitLongLines(self, lyricsList: List[str]) -> None:
         # Split lyrics lines that exceed max length (split verse between 20% to 80%)
         for i in range(len(lyricsList)):
             lineList = lyricsList[i].split("\n")
@@ -241,23 +242,12 @@ class HymnMaker:
     # =========================================== TOOLS ============================================
     # ==============================================================================================
 
-    def _getPrincipalPeriod(self, verse):
+    def _getPrincipalPeriod(self, verse: str) -> str:
         # Checks if the verse is periodic and is equal to a nontrivial rotation of itself
         i = (verse+verse).find(verse, 1, -1)
         return "" if i == -1 else verse[:i]
 
-    def _getMedian(self, lineCountList):
-        # Finds the median number of new lines per verse in this song
-        sortedLst = sorted(lineCountList)
-        lstLen = len(lineCountList)
-        index = (lstLen - 1) // 2
-
-        if (lstLen % 2):
-            return sortedLst[index]
-        else:
-            return (sortedLst[index] + sortedLst[index + 1])/2.0
-
-    def _cleanUpVerse(self, verse):
+    def _cleanUpVerse(self, verse: str) -> str:
         # Gets rid of [...] header
         index = verse.find(']') + 1
         verse = verse if index <= 0 else verse[index:]
@@ -265,7 +255,7 @@ class HymnMaker:
         # Remove new lines before and after text
         return verse.strip() + "\n"
 
-    def _getVisualLength(self, text):
+    def _getVisualLength(self, text: str) -> int:
         # A precise measurement to indicate if text will align or will take up multiple lines
         text = ''.join([i if ord(i) < 128 else ' ' for i in text])  # Replace all non-ascii characters
         return int(self.afm.string_width_height(text)[0])

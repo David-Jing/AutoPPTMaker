@@ -2,16 +2,21 @@ import sys
 import requests
 import sys
 import sqlite3
+from typing import Union
 from lyrics_extractor import SongLyrics
 
 
 class WebLookupTools:
-
-    def getHymn(name):
+    @staticmethod
+    def getHymn(name: str) -> dict:
         start = 0
         end = 0
         hymnName = ""
         lyrics = ""
+
+        # ==========================================================================================
+        # ====================================== SQL LOOKUP ========================================
+        # ==========================================================================================
 
         con = sqlite3.connect("HymnDatabase.db")
 
@@ -39,6 +44,10 @@ class WebLookupTools:
                 'lyrics': lyrics
             }
 
+        # ==========================================================================================
+        # ====================================== Web LOOKUP ========================================
+        # ==========================================================================================
+
         # API Key and Engine ID of Google Custom Search JSON API
         # Refer to https://pypi.org/project/lyrics-extractor/ for more detail
         GCS_API_KEY = 'AIzaSyA8jw1Ws2yXn7BDqj4yYYJmE1BAK_J53zA'
@@ -62,13 +71,14 @@ class WebLookupTools:
 
         return data
 
-    def getVerse(passage):
+    @staticmethod
+    def getVerse(passage: str) -> str:
         # ESV Bible Verse Lookup ID
         # Refer to https://api.esv.org/ for more details
         ESV_API_KEY = '6d6a8ca8f166e35b2c0343bfcdada88bd0e7b161'
         ESV_API_URL = 'https://api.esv.org/v3/passage/text/'
 
-        params = {
+        params: dict[str, Union[bool, str]] = {
             'q': passage,
             'include-headings': False,
             'include-footnotes': False,

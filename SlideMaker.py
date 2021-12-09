@@ -3,6 +3,7 @@ import os
 import sys
 import time
 import matplotlib
+import traceback
 
 from HymnMaker import HymnMaker
 from PPTEditorTools import DateFormatMode
@@ -12,17 +13,19 @@ from VerseMaker import VerseMaker
 from enum import Enum
 from matplotlib.afm import AFM
 
-VersionNumber = "1.0.4"
+VersionNumber = "1.1.0"
+
 
 class PPTMode(Enum):
     # Specifies the PPT output format
+    Null = -1
     Stream = 0
     Projected = 1
     Regular = 2
 
 
 class SlideMaker:
-    def __init__(self):
+    def __init__(self) -> None:
         # Offset for when creating new slides
         self.slideOffset = 0
 
@@ -34,40 +37,41 @@ class SlideMaker:
         afm_filename = os.path.join(matplotlib.get_data_path(), 'fonts', 'afm', 'ptmr8a.afm')
         self.afm = AFM(open(afm_filename, "rb"))
 
-    def setType(self, type):
+    def setType(self, type: PPTMode) -> None:
+        strType = ""
         if (type == PPTMode.Stream):
-            type = "Stream"
+            strType = "Stream"
         elif (type == PPTMode.Projected):
-            type = "Projected"
+            strType = "Projected"
         elif (type == PPTMode.Regular):
-            type = "Regular"
+            strType = "Regular"
         else:
             raise ValueError(f"ERROR : PPTMode not recognized.")
 
-        if (not os.path.exists(type + "SlideProperties.ini")):
-            raise IOError(f"ERROR : {type}SlideProperties.ini config file does not exist.")
+        if (not os.path.exists(strType + "SlideProperties.ini")):
+            raise IOError(f"ERROR : {strType}SlideProperties.ini config file does not exist.")
 
-        self.pptEditor = PPTEditorTools(type)
-        self.verseMaker = VerseMaker(type)
-        self.hymnMaker = HymnMaker(type)
+        self.pptEditor = PPTEditorTools(strType)
+        self.verseMaker = VerseMaker(strType)
+        self.hymnMaker = HymnMaker(strType)
 
         # Access slide property data
         self.config = configparser.ConfigParser()
-        self.config.read(type + "SlideProperties.ini")
+        self.config.read(strType + "SlideProperties.ini")
 
         # General linespacing for all slides
-        self.lineSpacing = self.config["SLIDE_PROPERTIES"]["SlideLineSpacing"]
+        self.lineSpacing = int(self.config["SLIDE_PROPERTIES"]["SlideLineSpacing"])
 
     # ======================================================================================================
     # ========================================== SLIDE MAKERS ==============================================
     # ======================================================================================================
 
-    def sundayServiceSlide(self):
+    def sundayServiceSlide(self) -> bool:
         title = self.input["SUNDAY_SERVICE_HEADER"]["SundayServiceHeaderTitle"].upper()
 
         return self._titleSlide(title, "SUNDAY_SERVICE_HEADER_PROPERTIES", "SundayServiceHeader")
 
-    def monthlyScriptureSlide(self):
+    def monthlyScriptureSlide(self) -> bool:
         title = self.input["MONTHLY_SCRIPTURE"]["MonthlyScriptureTitle"].upper()
         source = self.input["MONTHLY_SCRIPTURE"]["MonthlyScriptureSource"].upper()
         maxLineLength = int(self.config["MONTHLY_SCRIPTURE_PROPERTIES"]["MonthlyScriptureMaxLineLength"])
@@ -75,11 +79,11 @@ class SlideMaker:
         return self._scriptureSingleSlide(title, source, maxLineLength,
                                           "MONTHLY_SCRIPTURE_PROPERTIES", "MonthlyScripture")
 
-    def announcementSlide(self):
+    def announcementSlide(self) -> bool:
         title = self.input["ANNOUNCEMENTS"]["AnnouncementsTitle"].upper()
         return self._headerOnlySlide(title, "ANNOUNCEMENTS_PROPERTIES", "Announcements")
 
-    def bibleVerseMemorizationSlide(self, nextWeek=False):
+    def bibleVerseMemorizationSlide(self, nextWeek: bool = False) -> bool:
         lastWeekString = "LastWeek" if not nextWeek else ""
         title = self.input["BIBLE_MEMORIZATION"]["BibleMemorization" + lastWeekString + "Title"].upper()
         source = self.input["BIBLE_MEMORIZATION"]["BibleMemorization" + lastWeekString + "Source"].upper()
@@ -88,16 +92,16 @@ class SlideMaker:
         return self._scriptureSingleSlide(title, source, maxLineLength,
                                           "BIBLE_MEMORIZATION_PROPERTIES", "BibleMemorization", nextWeek)
 
-    def catechismSlide(self, nextWeek=False):
+    def catechismSlide(self, nextWeek: bool = False) -> bool:
         title = self.input["CATECHISM"]["Catechism" + ("LastWeek" if not nextWeek else "") + "Title"].upper()
         return self._headerOnlySlide(title, "CATECHISM_PROPERTIES", "Catechism", nextWeek)
 
-    def worshipSlide(self):
+    def worshipSlide(self) -> bool:
         title = self.input["WORSHIP_HEADER"]["WorshipHeaderTitle"].upper()
 
         return self._titleSlide(title, "WORSHIP_HEADER_PROPERTIES", "WorshipHeader")
 
-    def callToWorshipSlide(self):
+    def callToWorshipSlide(self) -> bool:
         source = self.input["CALL_TO_WORSHIP"]["CallToWorshipSource"].upper()
         maxLineLength = int(self.config["CALL_TO_WORSHIP_PROPERTIES"]["CallToWorshipMaxLineLength"])
         maxLinesPerSlide = int(self.config["CALL_TO_WORSHIP_PROPERTIES"]["CallToWorshipMaxLines"])
@@ -109,7 +113,7 @@ class SlideMaker:
         return self._scriptureMultiSlide(source, maxLineLength, maxLinesPerSlide,
                                          "CALL_TO_WORSHIP_PROPERTIES", "CallToWorship")
 
-    def prayerOfConfessionSlide(self):
+    def prayerOfConfessionSlide(self) -> bool:
         title = self.input["PRAYER_OF_CONFESSION"]["PrayerOfConfessionTitle"].upper()
         source = self.input["PRAYER_OF_CONFESSION"]["PrayerOfConfessionSource"].upper()
         maxLineLength = int(self.config["PRAYER_OF_CONFESSION_PROPERTIES"]["PrayerOfConfessionMaxLineLength"])
@@ -121,7 +125,7 @@ class SlideMaker:
         return self._scriptureSingleSlide(title, source, maxLineLength,
                                           "PRAYER_OF_CONFESSION_PROPERTIES", "PrayerOfConfession")
 
-    def holyCommunionSlide(self):
+    def holyCommunionSlide(self) -> bool:
         enabled = self.input["HOLY_COMMUNION"]["HolyCommunionEnabled"].upper()
         slideIndex = int(self.config["HOLY_COMMUNION_PROPERTIES"]["HolyCommunionIndex"]) + self.slideOffset
         numOfSlides = int(self.config["HOLY_COMMUNION_PROPERTIES"]["HolyCommunionSlides"])
@@ -137,17 +141,18 @@ class SlideMaker:
 
             self.slideOffset -= numOfSlides
 
-            return "Disabled"
+            # Disabled status
+            return False
 
         return True
 
-    def sermonHeaderSlide(self):
+    def sermonHeaderSlide(self) -> bool:
         title = self.input["SERMON_HEADER"]["SermonHeaderTitle"].upper()
         speaker = self.input["SERMON_HEADER"]["SermonHeaderSpeaker"]
 
         return self._sermonHeaderSlide(title, speaker, "SERMON_HEADER_PROPERTIES", "SermonHeader")
 
-    def sermonVerseSlide(self):
+    def sermonVerseSlide(self) -> bool:
         # Allow for multiple unique sources separated by ","
         sources = self.input["SERMON_VERSE"]["SermonVerseSource"].upper()
         sourceList = sources.split(",")
@@ -174,7 +179,7 @@ class SlideMaker:
 
         return output
 
-    def hymnSlides(self, number):
+    def hymnSlides(self, number: int) -> bool:
         hymnSource = self.input["HYMN"][f"Hymn{number}Source"]
         hymnIndex = int(self.config["HYMN_PROPERTIES"][f"Hymn{number}Index"]) + self.slideOffset
 
@@ -188,8 +193,8 @@ class SlideMaker:
     # ===================================== SLIDE MAKER IMPLEMENTATIONS ====================================
     # ======================================================================================================
 
-    def _titleSlide(self, title, propertyName, dataNameHeader):
-        [dateString, cordinalIndex] = self.pptEditor.getFormattedNextSundayDate(DateFormatMode.Full)
+    def _titleSlide(self, title: str, propertyName: str, dataNameHeader: str) -> bool:
+        (dateString, cordinalIndex) = self.pptEditor.getFormattedNextSundayDate(DateFormatMode.Full)
 
         checkPoint = [False, False]
         try:
@@ -201,9 +206,9 @@ class SlideMaker:
                         objectID=item[0],
                         text=title.upper(),
                         size=int(self.config[propertyName][dataNameHeader + "TitleTextSize"]),
-                        bold=self.config[propertyName][dataNameHeader + "TitleBolded"],
-                        italic=self.config[propertyName][dataNameHeader + "TitleItalicized"],
-                        underlined=self.config[propertyName][dataNameHeader + "TitleUnderlined"],
+                        bold=self.str2bool(self.config[propertyName][dataNameHeader + "TitleBolded"]),
+                        italic=self.str2bool(self.config[propertyName][dataNameHeader + "TitleItalicized"]),
+                        underlined=self.str2bool(self.config[propertyName][dataNameHeader + "TitleUnderlined"]),
                         alignment=self.config[propertyName][dataNameHeader + "TitleAlignment"])
                 elif '{Text}' in item[1]:
                     checkPoint[1] = True
@@ -211,14 +216,14 @@ class SlideMaker:
                         objectID=item[0],
                         text=dateString[:-5] + "," + dateString[-5:],   # Add comma between year and date
                         size=int(self.config[propertyName][dataNameHeader + "DateTextSize"]),
-                        bold=self.config[propertyName][dataNameHeader + "DateBolded"],
-                        italic=self.config[propertyName][dataNameHeader + "DateItalicized"],
-                        underlined=self.config[propertyName][dataNameHeader + "DateUnderlined"],
+                        bold=self.str2bool(self.config[propertyName][dataNameHeader + "DateBolded"]),
+                        italic=self.str2bool(self.config[propertyName][dataNameHeader + "DateItalicized"]),
+                        underlined=self.str2bool(self.config[propertyName][dataNameHeader + "DateUnderlined"]),
                         alignment=self.config[propertyName][dataNameHeader + "DateAlignment"])
 
                     self.pptEditor.setTextSuperScript(item[0], cordinalIndex, cordinalIndex + 2)
-        except:
-            print(f"\tERROR: {os.system.exc_info()[0]}")
+        except Exception:
+            print(f"\tERROR: {traceback.format_exc()}")
             return False
 
         if (False in checkPoint):
@@ -227,7 +232,7 @@ class SlideMaker:
 
         return self.pptEditor.commitSlideChanges()
 
-    def _hymnSlide(self, source, slideIndex):
+    def _hymnSlide(self, source: str, slideIndex: int) -> bool:
         if (not self.hymnMaker.setSource(source)):
             print(f"\tERROR: Hymn [{source}] not found.")
             return False
@@ -274,9 +279,9 @@ class SlideMaker:
                             objectID=item[0],
                             text=titleList[i - slideIndex],
                             size=titleFontSize,
-                            bold=self.config["HYMN_PROPERTIES"]["HymnTitleBolded"],
-                            italic=self.config["HYMN_PROPERTIES"]["HymnTitleItalicized"],
-                            underlined=self.config["HYMN_PROPERTIES"]["HymnTitleUnderlined"],
+                            bold=self.str2bool(self.config["HYMN_PROPERTIES"]["HymnTitleBolded"]),
+                            italic=self.str2bool(self.config["HYMN_PROPERTIES"]["HymnTitleItalicized"]),
+                            underlined=self.str2bool(self.config["HYMN_PROPERTIES"]["HymnTitleUnderlined"]),
                             alignment=self.config["HYMN_PROPERTIES"]["HymnTitleAlignment"])
                     elif ('{Text}' in item[1]):
                         checkPoint[1] = True
@@ -284,15 +289,15 @@ class SlideMaker:
                             objectID=item[0],
                             text=lyricsList[i - slideIndex],
                             size=int(self.config["HYMN_PROPERTIES"]["HymnTextSize"]),
-                            bold=self.config["HYMN_PROPERTIES"]["HymnBolded"],
-                            italic=self.config["HYMN_PROPERTIES"]["HymnItalicized"],
-                            underlined=self.config["HYMN_PROPERTIES"]["HymnUnderlined"],
+                            bold=self.str2bool(self.config["HYMN_PROPERTIES"]["HymnBolded"]),
+                            italic=self.str2bool(self.config["HYMN_PROPERTIES"]["HymnItalicized"]),
+                            underlined=self.str2bool(self.config["HYMN_PROPERTIES"]["HymnUnderlined"]),
                             alignment=self.config["HYMN_PROPERTIES"]["HymnAlignment"])
 
                         if (multiLineTitle):
                             self.pptEditor.updatePageElementTransform(item[0], translateY=int(self.config["HYMN_PROPERTIES"]["HymnLoweredUnitHeight"]))
-            except:
-                print(f"\tERROR: {os.system.exc_info()[0]}")
+            except Exception:
+                print(f"\tERROR: {traceback.format_exc()}")
                 return False
 
             if (False in checkPoint):
@@ -301,7 +306,7 @@ class SlideMaker:
 
         return self.pptEditor.commitSlideChanges()
 
-    def _scriptureSingleSlide(self, title, source, charPerLine, propertyName, dataNameHeader, nextWeek=False):
+    def _scriptureSingleSlide(self, title: str, source: str, charPerLine: int, propertyName: str, dataNameHeader: str, nextWeek: bool = False) -> bool:
         # Assumes monthly scripture is short enough to fit in one slide
         nextWeekString = "NextWeek" if nextWeek else ""
 
@@ -323,9 +328,9 @@ class SlideMaker:
                         objectID=item[0],
                         text=title,
                         size=int(self.config[propertyName][dataNameHeader + nextWeekString + "TitleTextSize"]),
-                        bold=self.config[propertyName][dataNameHeader + "TitleBolded"],
-                        italic=self.config[propertyName][dataNameHeader + "TitleItalicized"],
-                        underlined=self.config[propertyName][dataNameHeader + "TitleUnderlined"],
+                        bold=self.str2bool(self.config[propertyName][dataNameHeader + "TitleBolded"]),
+                        italic=self.str2bool(self.config[propertyName][dataNameHeader + "TitleItalicized"]),
+                        underlined=self.str2bool(self.config[propertyName][dataNameHeader + "TitleUnderlined"]),
                         alignment=self.config[propertyName][dataNameHeader + "TitleAlignment"])
                 elif '{Text}' in item[1]:
                     checkPoint[1] = True
@@ -333,9 +338,9 @@ class SlideMaker:
                         objectID=item[0],
                         text=verseString,
                         size=int(self.config[propertyName][dataNameHeader + "TextSize"]),
-                        bold=self.config[propertyName][dataNameHeader + "Bolded"],
-                        italic=self.config[propertyName][dataNameHeader + "Italicized"],
-                        underlined=self.config[propertyName][dataNameHeader + "Underlined"],
+                        bold=self.str2bool(self.config[propertyName][dataNameHeader + "Bolded"]),
+                        italic=self.str2bool(self.config[propertyName][dataNameHeader + "Italicized"]),
+                        underlined=self.str2bool(self.config[propertyName][dataNameHeader + "Underlined"]),
                         alignment=self.config[propertyName][dataNameHeader + "Alignment"])
 
                     # Superscript and bold the verse numbers, and set paragraph spacing between the verses
@@ -344,8 +349,8 @@ class SlideMaker:
                         self.pptEditor.setBold(item[0], ssRange[1], ssRange[2])
                         if (ssRange[1] > 0 and ssRange[0] == SSType.VerseNumber):  # No need for paragraph spacing in initial line
                             self.pptEditor.setSpaceAbove(item[0], ssRange[1], 10)
-        except:
-            print(f"\tERROR: {os.system.exc_info()[0]}")
+        except Exception:
+            print(f"\tERROR: {traceback.format_exc()}")
             return False
 
         if (False in checkPoint):
@@ -354,7 +359,7 @@ class SlideMaker:
 
         return self.pptEditor.commitSlideChanges()
 
-    def _scriptureMultiSlide(self, source, maxLineLength, maxLinesPerSlide, propertyName, dataNameHeader):
+    def _scriptureMultiSlide(self, source: str, maxLineLength: int, maxLinesPerSlide: int, propertyName: str, dataNameHeader: str) -> bool:
         # Assumes monthly scripture is short enough to fit in one slide
         if (not self.verseMaker.setSource(source, maxLineLength)):
             print(f"\tERROR: Verse {source} not found.")
@@ -375,7 +380,7 @@ class SlideMaker:
         self.slideOffset += len(slideVersesList) - 1
 
         # Get units of paragraph that separates verse numbers
-        paragraphSpace = self.config["VERSE_PROPERTIES"]["VerseParagraphSpace"]
+        paragraphSpace = int(self.config["VERSE_PROPERTIES"]["VerseParagraphSpace"])
 
         # Insert title and verses data
         for i in range(slideIndex, slideIndex + len(slideVersesList)):
@@ -389,9 +394,9 @@ class SlideMaker:
                             objectID=item[0],
                             text=title,
                             size=int(self.config[propertyName][dataNameHeader + "TitleTextSize"]),
-                            bold=self.config[propertyName][dataNameHeader + "TitleBolded"],
-                            italic=self.config[propertyName][dataNameHeader + "TitleItalicized"],
-                            underlined=self.config[propertyName][dataNameHeader + "TitleUnderlined"],
+                            bold=self.str2bool(self.config[propertyName][dataNameHeader + "TitleBolded"]),
+                            italic=self.str2bool(self.config[propertyName][dataNameHeader + "TitleItalicized"]),
+                            underlined=self.str2bool(self.config[propertyName][dataNameHeader + "TitleUnderlined"]),
                             alignment=self.config[propertyName][dataNameHeader + "TitleAlignment"])
                     elif '{Text}' in item[1]:
                         checkPoint[1] = True
@@ -399,9 +404,9 @@ class SlideMaker:
                             objectID=item[0],
                             text=slideVersesList[i - slideIndex],
                             size=int(self.config[propertyName][dataNameHeader + "TextSize"]),
-                            bold=self.config[propertyName][dataNameHeader + "Bolded"],
-                            italic=self.config[propertyName][dataNameHeader + "Italicized"],
-                            underlined=self.config[propertyName][dataNameHeader + "Underlined"],
+                            bold=self.str2bool(self.config[propertyName][dataNameHeader + "Bolded"]),
+                            italic=self.str2bool(self.config[propertyName][dataNameHeader + "Italicized"]),
+                            underlined=self.str2bool(self.config[propertyName][dataNameHeader + "Underlined"]),
                             alignment=self.config[propertyName][dataNameHeader + "Alignment"])
 
                         # Superscript and bold the verse numbers, and set paragraph spacing between the verses
@@ -410,8 +415,8 @@ class SlideMaker:
                             self.pptEditor.setBold(item[0], ssRange[1], ssRange[2])
                             if (ssRange[1] > 0 and ssRange[0] == SSType.VerseNumber):  # No need for paragraph spacing in initial line
                                 self.pptEditor.setSpaceAbove(item[0], ssRange[1], paragraphSpace)
-            except:
-                print(f"\tERROR: {os.system.exc_info()[0]}")
+            except Exception:
+                print(f"\tERROR: {traceback.format_exc()}")
                 return False
 
             if (False in checkPoint):
@@ -420,7 +425,7 @@ class SlideMaker:
 
         return self.pptEditor.commitSlideChanges()
 
-    def _sermonHeaderSlide(self, title, speaker, propertyName, dataNameHeader):
+    def _sermonHeaderSlide(self, title: str, speaker: str, propertyName: str, dataNameHeader: str) -> bool:
         checkPoint = [False, False]
         try:
             data = self.pptEditor.getSlideTextData(int(self.config[propertyName][dataNameHeader + "Index"]) + self.slideOffset)
@@ -431,9 +436,9 @@ class SlideMaker:
                         objectID=item[0],
                         text=title.upper(),
                         size=int(self.config[propertyName][dataNameHeader + "TitleTextSize"]),
-                        bold=self.config[propertyName][dataNameHeader + "TitleBolded"],
-                        italic=self.config[propertyName][dataNameHeader + "TitleItalicized"],
-                        underlined=self.config[propertyName][dataNameHeader + "TitleUnderlined"],
+                        bold=self.str2bool(self.config[propertyName][dataNameHeader + "TitleBolded"]),
+                        italic=self.str2bool(self.config[propertyName][dataNameHeader + "TitleItalicized"]),
+                        underlined=self.str2bool(self.config[propertyName][dataNameHeader + "TitleUnderlined"]),
                         alignment=self.config[propertyName][dataNameHeader + "TitleAlignment"])
                 elif '{Text}' in item[1]:
                     checkPoint[1] = True
@@ -441,12 +446,12 @@ class SlideMaker:
                         objectID=item[0],
                         text=speaker.title(),
                         size=int(self.config[propertyName][dataNameHeader + "SpeakerTextSize"]),
-                        bold=self.config[propertyName][dataNameHeader + "SpeakerBolded"],
-                        italic=self.config[propertyName][dataNameHeader + "SpeakerItalicized"],
-                        underlined=self.config[propertyName][dataNameHeader + "SpeakerUnderlined"],
+                        bold=self.str2bool(self.config[propertyName][dataNameHeader + "SpeakerBolded"]),
+                        italic=self.str2bool(self.config[propertyName][dataNameHeader + "SpeakerItalicized"]),
+                        underlined=self.str2bool(self.config[propertyName][dataNameHeader + "SpeakerUnderlined"]),
                         alignment=self.config[propertyName][dataNameHeader + "SpeakerAlignment"])
-        except:
-            print(f"\tERROR: {os.system.exc_info()[0]}")
+        except Exception:
+            print(f"\tERROR: {traceback.format_exc()}")
             return False
 
         if (False in checkPoint):
@@ -455,7 +460,7 @@ class SlideMaker:
 
         return self.pptEditor.commitSlideChanges()
 
-    def _headerOnlySlide(self, title, propertyName, dataNameHeader, nextWeek=False):
+    def _headerOnlySlide(self, title: str, propertyName: str, dataNameHeader: str, nextWeek: bool = False) -> bool:
         nextWeekString = "NextWeek" if nextWeek else ""
         checkPoint = [False]
         try:
@@ -467,12 +472,12 @@ class SlideMaker:
                         objectID=item[0],
                         text=title.upper(),
                         size=int(self.config[propertyName][dataNameHeader + nextWeekString + "TitleTextSize"]),
-                        bold=self.config[propertyName][dataNameHeader + "TitleBolded"],
-                        italic=self.config[propertyName][dataNameHeader + "TitleItalicized"],
-                        underlined=self.config[propertyName][dataNameHeader + "TitleUnderlined"],
+                        bold=self.str2bool(self.config[propertyName][dataNameHeader + "TitleBolded"]),
+                        italic=self.str2bool(self.config[propertyName][dataNameHeader + "TitleItalicized"]),
+                        underlined=self.str2bool(self.config[propertyName][dataNameHeader + "TitleUnderlined"]),
                         alignment=self.config[propertyName][dataNameHeader + "TitleAlignment"])
-        except:
-            print(f"\tERROR: {os.system.exc_info()[0]}")
+        except Exception:
+            print(f"\tERROR: {traceback.format_exc()}")
             return False
 
         if (False in checkPoint):
@@ -485,7 +490,7 @@ class SlideMaker:
     # ============================================ TOOLS ===================================================
     # ======================================================================================================
 
-    def _deleteSlide(self, slideIndex):
+    def _deleteSlide(self, slideIndex: int) -> bool:
         sourceSlideID = self.pptEditor.getSlideID(slideIndex)
         self.pptEditor.deleteSlide(sourceSlideID)
 
@@ -494,17 +499,21 @@ class SlideMaker:
 
         self.slideOffset -= 1
 
-        return "Disabled"
+        # Disabled status
+        return False
 
-    def _openSlideInBrowser(self):
+    def str2bool(self, boolString: str) -> bool:
+        return boolString.lower() in ("yes", "true", "t", "1")
+
+    def _openSlideInBrowser(self) -> None:
         self.pptEditor.openSlideInBrowser()
 
-    def _insertText(self, objectID, text, size, bold, italic, underlined, alignment, linespacing=-1):
+    def _insertText(self, objectID: str, text: str, size: int, bold: bool, italic: bool, underlined: bool, alignment: str, linespacing: int = -1) -> None:
         self.pptEditor.setText(objectID, text)
         self.pptEditor.setTextStyle(objectID, bold, italic, underlined, size)
         self.pptEditor.setParagraphStyle(objectID, self.lineSpacing if linespacing < 0 else linespacing, alignment)
 
-    def _getVisualLength(self, text):
+    def _getVisualLength(self, text: str) -> int:
         # A precise measurement to indicate if text will align or will take up multiple lines
         text = ''.join([i if ord(i) < 128 else ' ' for i in text])  # Replace all non-ascii characters
         return int(self.afm.string_width_height(text)[0])
@@ -519,7 +528,7 @@ if __name__ == '__main__':
 
     mode = ""
     while (mode != "q"):
-        type = -1
+        type = PPTMode.Null
         mode = input("Input: ")
         if (len(mode) > 0):
             if (mode == "s"):
@@ -533,7 +542,7 @@ if __name__ == '__main__':
                 input = r' '.join(sys.argv[2:])
                 print(f"String Visual Length of '{input}' = {sm._getVisualLength(input)} Units")
 
-        if (type != -1):
+        if (type != PPTMode.Null):
             start = time.time()
 
             print("\nINITIALIZING...")
@@ -541,14 +550,15 @@ if __name__ == '__main__':
 
             sm.setType(type)
 
+            strType = ""
             if (type == PPTMode.Stream):
-                type = "Stream"
+                strType = "Stream"
             elif (type == PPTMode.Projected):
-                type = "Projected"
+                strType = "Projected"
             elif (type == PPTMode.Regular):
-                type = "Regular"
+                strType = "Regular"
 
-            print(f"CREATING {type.upper()} SLIDES...")
+            print(f"CREATING {strType.upper()} SLIDES...")
             print("  sundayServiceSlide() : ", sm.sundayServiceSlide())
             print("  monthlyScriptureSlide() : ", sm.monthlyScriptureSlide())
             print("  announcementSlide() : ", sm.announcementSlide())
@@ -567,7 +577,7 @@ if __name__ == '__main__':
             print("  hymnSlides(3) : ", sm.hymnSlides(3))
             print("  hymnSlides(4) : ", sm.hymnSlides(4))
 
-            print(f"OPENING {type.upper()} SLIDES...")
+            print(f"OPENING {strType.upper()} SLIDES...")
             sm._openSlideInBrowser()
 
             print(f"\nTask completed in {(time.time() - start):.2f} seconds.\n")
