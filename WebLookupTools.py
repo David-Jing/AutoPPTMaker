@@ -18,7 +18,7 @@ class WebLookupTools:
         # ====================================== SQL LOOKUP ========================================
         # ==========================================================================================
 
-        con = sqlite3.connect("HymnDatabase.db")
+        con = sqlite3.connect("Data/HymnDatabase.db")
 
         for row in con.execute(f"SELECT * FROM Hymn WHERE Replace(HymnName, ',', '') LIKE \"%{name.replace(',', '')}%\" \
                                                 AND VERSION = 1 ORDER BY HymnName, Number"):

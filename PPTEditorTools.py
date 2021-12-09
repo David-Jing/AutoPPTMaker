@@ -4,7 +4,7 @@ import os.path
 import datetime
 import webbrowser
 import googleapiclient
-from typing import List, Tuple, Union
+from typing import List, Tuple
 from datetime import timedelta
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -27,8 +27,10 @@ class PPTEditorTools:
                       'https://www.googleapis.com/auth/drive']
 
         # The ID of the source slide.
+        if (not os.path.exists("SlideProperties/" + type + "SlideProperties.ini")):
+            raise IOError(f"ERROR : {type}SlideProperties.ini config file cannot be found.")
         config = configparser.ConfigParser()
-        config.read(type + "SlideProperties.ini")
+        config.read("SlideProperties/" + type + "SlideProperties.ini")
         self.sourceSlideID = config["SLIDE_PROPERTIES"][type + "SourceSlideID"]
 
         # Get access to the slide and drive
@@ -65,7 +67,7 @@ class PPTEditorTools:
                 creds.refresh(Request())
             else:
                 flow = InstalledAppFlow.from_client_secrets_file(
-                    'credentials.json', self.scope)
+                    'Data/credentials.json', self.scope)
                 creds = flow.run_local_server(port=0)
             # Save the credentials for the next run
             with open('token.pickle', 'w') as token:

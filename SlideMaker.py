@@ -30,6 +30,8 @@ class SlideMaker:
         self.slideOffset = 0
 
         # Access slide input data
+        if (not os.path.exists("SlideInputs.ini")):
+            raise IOError(f"ERROR : SlideInputs.ini input file cannot be found.")
         self.input = configparser.ConfigParser()
         self.input.read("SlideInputs.ini")
 
@@ -48,8 +50,8 @@ class SlideMaker:
         else:
             raise ValueError(f"ERROR : PPTMode not recognized.")
 
-        if (not os.path.exists(strType + "SlideProperties.ini")):
-            raise IOError(f"ERROR : {strType}SlideProperties.ini config file does not exist.")
+        if (not os.path.exists("SlideProperties/" + strType + "SlideProperties.ini")):
+            raise IOError(f"ERROR : {strType}SlideProperties.ini config file cannot be found.")
 
         self.pptEditor = PPTEditorTools(strType)
         self.verseMaker = VerseMaker(strType)
@@ -57,7 +59,7 @@ class SlideMaker:
 
         # Access slide property data
         self.config = configparser.ConfigParser()
-        self.config.read(strType + "SlideProperties.ini")
+        self.config.read("SlideProperties/" + strType + "SlideProperties.ini")
 
         # General linespacing for all slides
         self.lineSpacing = int(self.config["SLIDE_PROPERTIES"]["SlideLineSpacing"])

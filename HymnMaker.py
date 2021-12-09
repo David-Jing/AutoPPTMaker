@@ -22,8 +22,10 @@ formattedLyricsList - list of formatted verses
 class HymnMaker:
     def __init__(self, type: str) -> None:
         # Get heuristics
+        if (not os.path.exists("SlideProperties/" + type + "SlideProperties.ini")):
+            raise IOError(f"ERROR : {type}SlideProperties.ini config file cannot be found.")
         config = configparser.ConfigParser()
-        config.read(type + "SlideProperties.ini")
+        config.read("SlideProperties/" + type + "SlideProperties.ini")
 
         self.maxLines = int(config["HYMN_PROPERTIES"]["HymnMaxLines"])
         self.minLines = int(config["HYMN_PROPERTIES"]["HymnMinLines"])

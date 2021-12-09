@@ -36,8 +36,10 @@ class VerseMaker:
         self.verses = ""
 
         # Get heuristics
+        if (not os.path.exists("SlideProperties/" + type + "SlideProperties.ini")):
+            raise IOError(f"ERROR : {type}SlideProperties.ini config file cannot be found.")
         config = configparser.ConfigParser()
-        config.read(type + "SlideProperties.ini")
+        config.read("SlideProperties/" + type + "SlideProperties.ini")
 
         self.maxLineLength = 0
         self.indentSpace = int(config["VERSE_PROPERTIES"]["VerseIndentSpace"])
