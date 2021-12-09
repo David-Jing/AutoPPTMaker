@@ -5,8 +5,14 @@ import sqlite3
 from typing import Union
 from lyrics_extractor import SongLyrics
 
+'''
+Looks up ESV bible verses and song lyrics.
+Song lyrics are picked from either a local SQL server or the web;
+the SQL server provides better lookup accuracy than the web.
+'''
 
-class WebLookupTools:
+
+class LookupTools:
     @staticmethod
     def getHymn(name: str) -> dict:
         start = 0
@@ -45,7 +51,7 @@ class WebLookupTools:
             }
 
         # ==========================================================================================
-        # ====================================== Web LOOKUP ========================================
+        # ====================================== WEB LOOKUP ========================================
         # ==========================================================================================
 
         # API Key and Engine ID of Google Custom Search JSON API
@@ -104,11 +110,11 @@ if __name__ == '__main__':
     if (sys.argv[1] == '-v'):
         verse = ' '.join(sys.argv[2:])
         if verse:
-            print(WebLookupTools.getVerse(verse))
+            print(LookupTools.getVerse(verse))
     # python WebLookup.py -h [hymn name]
     elif (sys.argv[1] == '-h'):
         name = ' '.join(sys.argv[2:])
         if name:
-            hymn = WebLookupTools.getHymn(name)
+            hymn = LookupTools.getHymn(name)
             print(hymn['title'] + f'\n')
             print(hymn['lyrics'])

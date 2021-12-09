@@ -5,7 +5,7 @@ import sys
 import os
 
 import matplotlib
-from WebLookupTools import WebLookupTools
+from LookupTools import LookupTools
 from matplotlib.afm import AFM
 from typing import List
 
@@ -40,7 +40,7 @@ class HymnMaker:
             return False
 
         self.hymnTitle = hymnTitle
-        self.hymn = WebLookupTools.getHymn(hymnTitle)
+        self.hymn = LookupTools.getHymn(hymnTitle)
 
         return (self.hymn["title"] != "Not Found" and self.hymn["lyrics"] != "Not Found")
 

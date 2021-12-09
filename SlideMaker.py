@@ -13,6 +13,10 @@ from VerseMaker import VerseMaker
 from enum import Enum
 from matplotlib.afm import AFM
 
+'''
+Core class of the SlideMaker application, assembles all other classes to generate Google Slides from an user-defined input file.
+'''
+
 VersionNumber = "1.1.0"
 
 

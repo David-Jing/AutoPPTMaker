@@ -6,7 +6,7 @@ import math
 from enum import Enum
 
 import matplotlib
-from WebLookupTools import WebLookupTools
+from LookupTools import LookupTools
 from matplotlib.afm import AFM
 
 '''
@@ -55,7 +55,7 @@ class VerseMaker:
 
         self.maxLineLength = maxLineLength
         self.verseSource = verseSource
-        self.verses = WebLookupTools.getVerse(self.verseSource)
+        self.verses = LookupTools.getVerse(self.verseSource)
 
         return self.verses != "Not Found"
 

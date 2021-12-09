@@ -1,9 +1,11 @@
 from __future__ import print_function
+
 import configparser
 import os.path
 import datetime
 import webbrowser
 import googleapiclient
+
 from typing import List, Tuple
 from datetime import timedelta
 from googleapiclient.discovery import build
@@ -12,6 +14,10 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from apiclient import errors
 from enum import Enum
+
+'''
+Tools to manipulate/retrieve Google Slide elements and Google Drive files.
+'''
 
 
 class DateFormatMode(Enum):
