@@ -6,15 +6,17 @@ import matplotlib
 import traceback
 
 from HymnMaker import HymnMaker
-from PPTEditorTools import DateFormatMode
-from PPTEditorTools import PPTEditorTools
+from GoogleAPITools import DateFormatMode
+from GoogleAPITools import GoogleAPITools
 from VerseMaker import SSType
 from VerseMaker import VerseMaker
 from enum import Enum
 from matplotlib.afm import AFM
 
 '''
+
 Core class of the SlideMaker application, assembles all other classes to generate Google Slides from an user-defined input file.
+
 '''
 
 VersionNumber = "1.1.0"
@@ -34,7 +36,7 @@ class SlideMaker:
         self.slideOffset = 0
 
         # Access slide input data
-        if (not os.path.exists("SlideInputs.ini")):
+        if not os.path.exists("SlideInputs.ini"):
             raise IOError(f"ERROR : SlideInputs.ini input file cannot be found.")
         self.input = configparser.ConfigParser()
         self.input.read("SlideInputs.ini")
@@ -54,16 +56,16 @@ class SlideMaker:
         else:
             raise ValueError(f"ERROR : PPTMode not recognized.")
 
-        if (not os.path.exists("SlideProperties/" + strType + "SlideProperties.ini")):
+        if not os.path.exists("Data/" + strType + "SlideProperties.ini"):
             raise IOError(f"ERROR : {strType}SlideProperties.ini config file cannot be found.")
 
-        self.pptEditor = PPTEditorTools(strType)
+        self.pptEditor = GoogleAPITools(strType)
         self.verseMaker = VerseMaker(strType)
         self.hymnMaker = HymnMaker(strType)
 
         # Access slide property data
         self.config = configparser.ConfigParser()
-        self.config.read("SlideProperties/" + strType + "SlideProperties.ini")
+        self.config.read("Data/" + strType + "SlideProperties.ini")
 
         # General linespacing for all slides
         self.lineSpacing = int(self.config["SLIDE_PROPERTIES"]["SlideLineSpacing"])

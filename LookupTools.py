@@ -6,9 +6,11 @@ from typing import Union
 from lyrics_extractor import SongLyrics
 
 '''
+
 Looks up ESV bible verses and song lyrics.
 Song lyrics are picked from either a local SQL server or the web;
 the SQL server provides better lookup accuracy than the web.
+
 '''
 
 

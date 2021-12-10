@@ -10,6 +10,7 @@ from LookupTools import LookupTools
 from matplotlib.afm import AFM
 
 '''
+
 Looks up inputted biblical verse and generates formatted verse slide texts.
 Please setSource() before running any getters.
 
@@ -21,6 +22,7 @@ Superscript alignment:
  - 1 superscripted character = 2 normal spaces converted to superscript
  - 2 superscripted characters = 1 normal space converted to superscript
  - 3 superscripted characters = 1 normal space converted to superscript
+ 
 '''
 
 
@@ -36,10 +38,10 @@ class VerseMaker:
         self.verses = ""
 
         # Get heuristics
-        if (not os.path.exists("SlideProperties/" + type + "SlideProperties.ini")):
+        if not os.path.exists("Data/" + type + "SlideProperties.ini"):
             raise IOError(f"ERROR : {type}SlideProperties.ini config file cannot be found.")
         config = configparser.ConfigParser()
-        config.read("SlideProperties/" + type + "SlideProperties.ini")
+        config.read("Data/" + type + "SlideProperties.ini")
 
         self.maxLineLength = 0
         self.indentSpace = int(config["VERSE_PROPERTIES"]["VerseIndentSpace"])

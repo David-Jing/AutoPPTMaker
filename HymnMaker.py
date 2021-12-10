@@ -10,6 +10,7 @@ from matplotlib.afm import AFM
 from typing import List
 
 '''
+
 Looks up inputted title and generates formatted hymn slide texts.
 Please run setSource() before getContent().
 
@@ -22,10 +23,10 @@ formattedLyricsList - list of formatted verses
 class HymnMaker:
     def __init__(self, type: str) -> None:
         # Get heuristics
-        if (not os.path.exists("SlideProperties/" + type + "SlideProperties.ini")):
+        if (not os.path.exists("Data/" + type + "SlideProperties.ini")):
             raise IOError(f"ERROR : {type}SlideProperties.ini config file cannot be found.")
         config = configparser.ConfigParser()
-        config.read("SlideProperties/" + type + "SlideProperties.ini")
+        config.read("Data/" + type + "SlideProperties.ini")
 
         self.maxLines = int(config["HYMN_PROPERTIES"]["HymnMaxLines"])
         self.minLines = int(config["HYMN_PROPERTIES"]["HymnMinLines"])

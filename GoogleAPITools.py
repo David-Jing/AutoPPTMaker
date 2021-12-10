@@ -5,9 +5,11 @@ import os.path
 import datetime
 import webbrowser
 import googleapiclient
+import pytz
 
 from typing import List, Tuple
 from datetime import timedelta
+from googleapiclient.http import MediaIoBaseDownload
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
@@ -16,7 +18,9 @@ from apiclient import errors
 from enum import Enum
 
 '''
+
 Tools to manipulate/retrieve Google Slide elements and Google Drive files.
+
 '''
 
 
@@ -26,18 +30,24 @@ class DateFormatMode(Enum):
     Short = 1
 
 
-class PPTEditorTools:
+class GoogleAPITools:
     def __init__(self, type: str) -> None:
         # If modifying these scopes, delete the file token.json.
         self.scope = ['https://www.googleapis.com/auth/presentations',
                       'https://www.googleapis.com/auth/drive']
 
         # The ID of the source slide.
-        if (not os.path.exists("SlideProperties/" + type + "SlideProperties.ini")):
+        if not os.path.exists("Data/" + type + "SlideProperties.ini"):
             raise IOError(f"ERROR : {type}SlideProperties.ini config file cannot be found.")
-        config = configparser.ConfigParser()
-        config.read("SlideProperties/" + type + "SlideProperties.ini")
-        self.sourceSlideID = config["SLIDE_PROPERTIES"][type + "SourceSlideID"]
+        self.config = configparser.ConfigParser()
+        self.config.read("Data/" + type + "SlideProperties.ini")
+        self.sourceSlideID = self.config["SLIDE_PROPERTIES"][type + "SourceSlideID"]
+
+        # Retrieve global configuration
+        if not os.path.exists("Data/GlobalProperties.ini"):
+            raise IOError(f"ERROR : GlobalProperties.ini config file cannot be found.")
+        self.config = configparser.ConfigParser()
+        self.config.read("Data/GlobalProperties.ini")
 
         # Get access to the slide and drive
         [self.slideService, self.driveService] = self.getAPIServices()
@@ -54,6 +64,9 @@ class PPTEditorTools:
         # Get access to slide data
         self.presentation = self.slideService.presentations().get(
             presentationId=self.newSlideID).execute()
+
+        # Update local hymn database
+        self.updateHymnDataBase()
 
     # ==========================================================================================
     # ======================================= API TOOLS ========================================
@@ -237,23 +250,23 @@ class PPTEditorTools:
     # ==========================================================================================
 
     def removePreviousSlides(self) -> None:
-        # Remove all previously created slides
-        if (os.path.exists("Data/SlideIDList.txt")):
-            f = open("Data/SlideIDList.txt", "r+")
-            lines = f.readlines()
+        # Delete all previously created slide files on drive
+        if os.path.exists("Data/SlideIDList.txt"):
+            with open("Data/SlideIDList.txt", "r+") as f:
+                lines = f.readlines()
 
-            for line in lines:
-                try:
-                    # Get rid of the new line symbol in the ID
-                    self.driveService.files().delete(fileId=line[:-1]).execute()
-                except errors.HttpError as error:
-                    print(f"WARNING : An error occurred on slide removal: {error}")
+                for line in lines:
+                    try:
+                        # Get rid of the new line symbol in the ID
+                        self.driveService.files().delete(fileId=line[:-1]).execute()
+                    except errors.HttpError as error:
+                        print(f"WARNING : An error occurred on slide removal: {error}")
 
-            # Clear out the file
-            f.truncate(0)
+                # Clear out the file
+                f.truncate(0)
 
     def getDuplicatePresentation(self, type: str) -> str:
-        # Generates a Duplicate Presentation
+        # Generates a duplicate presentation from source slide
         body = {
             'name': self.getUpcomingSlideTitle(type)
         }
@@ -263,14 +276,46 @@ class PPTEditorTools:
 
         # Write ID to file, so it can be deleted later
         id = drive_response.get('id')
-        f = open("SlideIDList.txt", "a")
-        f.write(id + "\n")
-        f.close()
+        with open("Data/SlideIDList.txt", "a") as f:
+            f.write(id + "\n")
 
         return id
 
+    # ==========================================================================================
+    # =================================== LOCAL CHANGE TOOLS ===================================
+    # ==========================================================================================
+
+    def updateHymnDataBase(self) -> None:
+        # Lookup latest HymnDatabase file on Google Drive, replace local copy if local copy is older
+        folderId = self.config["HYMN_DATABASE_PROPERTIES"]["HymnDataBaseSharedFolderID"]
+        response = self.driveService.files().list(supportsAllDrives=True,
+                                                  includeItemsFromAllDrives=True,
+                                                  q=f"parents in '{folderId}' and trashed = false",
+                                                  fields="nextPageToken,files(id, name, modifiedTime)").execute()
+        for dFile in response.get('files', []):
+            if dFile['name'] == 'HymnDatabase.db':
+                file_id = dFile['id']
+
+                # Get modified date of DataBase.db file and compare
+                localModifiedDate = pytz.utc.localize(datetime.datetime.min)
+                driveModifiedDate = pytz.utc.localize(datetime.datetime.strptime(dFile['modifiedTime'], '%Y-%m-%dT%H:%M:%S.%fZ'))
+
+                if os.path.exists("Data/HymnDatabase.db"):
+                    localModifiedDate = datetime.datetime.fromtimestamp(os.path.getmtime("Data/HymnDatabase.db"), datetime.timezone.utc)
+
+                # Overwrite local file
+                if localModifiedDate < driveModifiedDate:
+                    request = self.driveService.files().get_media(fileId=file_id)
+                    with open("Data/HymnDatabase.db", "wb") as f:
+                        downloader = MediaIoBaseDownload(f, request)
+                        done = False
+                        while done is False:
+                            status, done = downloader.next_chunk()
+                            print("UPDATING HYMN DATABASE : %d%%" % int(status.progress() * 100))
+
+                return
+
 
 if __name__ == '__main__':
-    pe = PPTEditorTools('Stream')
-    # print(pe.presentation.get('slides')[20]['pageElements'])
-    print(type(pe.getSlideID(6)))
+    pe = GoogleAPITools('Stream')
+    pe.updateHymnDataBase()
