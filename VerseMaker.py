@@ -22,17 +22,16 @@ Superscript alignment:
  - 1 superscripted character = 2 normal spaces converted to superscript
  - 2 superscripted characters = 1 normal space converted to superscript
  - 3 superscripted characters = 1 normal space converted to superscript
- 
+
 '''
 
 
-class SSType(Enum):
-    # Specifies if the superscripted range is superscripting empty spaces or verse numbers
-    Space = 0
-    VerseNumber = 1
-
-
 class VerseMaker:
+    class SSType(Enum):
+        # Specifies if the superscripted range is superscripting empty spaces or verse numbers
+        Space = 0
+        VerseNumber = 1
+
     def __init__(self, type):
         self.verseSource = ""
         self.verses = ""
@@ -128,7 +127,7 @@ class VerseMaker:
                 isFirstLine = True
                 for line in verseList[verseIndex]:
                     verseString += line
-                    if (ssIndex < ssIndexListLength and (ssIndexList[ssIndex][0] == SSType.Space or isFirstLine)):
+                    if (ssIndex < ssIndexListLength and (ssIndexList[ssIndex][0] == self.SSType.Space or isFirstLine)):
                         isFirstLine = False
                         currSSSlideIndexList.append([ssIndexList[ssIndex][0], ssIndexList[ssIndex][1] - charIndex, ssIndexList[ssIndex][2] - charIndex])
                         ssIndex += 1
@@ -211,12 +210,12 @@ class VerseMaker:
                     nextVerseNum = int(line[0:numEndIndex])
                     # Numbers either increment or reset to 1 on new chapter
                     if (numEndIndex != -1 and (currVerseNum < 0 or currVerseNum + 1 == nextVerseNum or nextVerseNum == 1)):
-                        ssIndexList.append([SSType.VerseNumber, index, numEndIndex + index])
+                        ssIndexList.append([self.SSType.VerseNumber, index, numEndIndex + index])
                         currVerseNum = nextVerseNum
                 else:
                     ssAlignmentSpace = self._getSSAlignmentSpace(len(str(currVerseNum)))
                     if (ssAlignmentSpace > 0):
-                        ssIndexList.append([SSType.Space, index, ssAlignmentSpace + index])
+                        ssIndexList.append([self.SSType.Space, index, ssAlignmentSpace + index])
 
                 index += len(line)
 

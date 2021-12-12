@@ -6,9 +6,7 @@ import matplotlib
 import traceback
 
 from HymnMaker import HymnMaker
-from GoogleAPITools import DateFormatMode
 from GoogleAPITools import GoogleAPITools
-from VerseMaker import SSType
 from VerseMaker import VerseMaker
 from enum import Enum
 from matplotlib.afm import AFM
@@ -45,21 +43,13 @@ class SlideMaker:
         afm_filename = os.path.join(matplotlib.get_data_path(), 'fonts', 'afm', 'ptmr8a.afm')
         self.afm = AFM(open(afm_filename, "rb"))
 
-    def setType(self, type: PPTMode) -> None:
-        strType = ""
-        if (type == PPTMode.Stream):
-            strType = "Stream"
-        elif (type == PPTMode.Projected):
-            strType = "Projected"
-        elif (type == PPTMode.Regular):
-            strType = "Regular"
-        else:
-            raise ValueError(f"ERROR : PPTMode not recognized.")
+    def setType(self, pptType: PPTMode) -> None:
+        strType = pptType.name
 
         if not os.path.exists("Data/" + strType + "SlideProperties.ini"):
             raise IOError(f"ERROR : {strType}SlideProperties.ini config file cannot be found.")
 
-        self.pptEditor = GoogleAPITools(strType)
+        self.gEditor = GoogleAPITools(strType)
         self.verseMaker = VerseMaker(strType)
         self.hymnMaker = HymnMaker(strType)
 
@@ -141,10 +131,10 @@ class SlideMaker:
         # If not enabled, delete section
         if (enabled != "TRUE"):
             for i in range(slideIndex, slideIndex + numOfSlides):
-                sourceSlideID = self.pptEditor.getSlideID(i)
-                self.pptEditor.deleteSlide(sourceSlideID)
+                sourceSlideID = self.gEditor.getSlideID(i)
+                self.gEditor.deleteSlide(sourceSlideID)
 
-            if (not self.pptEditor.commitSlideChanges()):
+            if (not self.gEditor.commitSlideChanges()):
                 return False
 
             self.slideOffset -= numOfSlides
@@ -169,11 +159,11 @@ class SlideMaker:
 
         # Generate templates for each verse source
         slideIndex = int(self.config["SERMON_VERSE_PROPERTIES"]["SermonVerseIndex"]) + self.slideOffset
-        sourceSlideID = self.pptEditor.getSlideID(slideIndex)
+        sourceSlideID = self.gEditor.getSlideID(slideIndex)
         for i in range(len(sourceList) - 1):  # Recall that the original source slide remains
-            self.pptEditor.duplicateSlide(
+            self.gEditor.duplicateSlide(
                 sourceSlideID, sourceSlideID + '_d' + str(i))
-        if (not self.pptEditor.commitSlideChanges()):
+        if (not self.gEditor.commitSlideChanges()):
             return False
 
         # Iterate and generate the slides
@@ -202,11 +192,11 @@ class SlideMaker:
     # ======================================================================================================
 
     def _titleSlide(self, title: str, propertyName: str, dataNameHeader: str) -> bool:
-        (dateString, cordinalIndex) = self.pptEditor.getFormattedNextSundayDate(DateFormatMode.Full)
+        (dateString, cordinalIndex) = self.gEditor.getFormattedNextSundayDate(self.gEditor.DateFormatMode.Full)
 
         checkPoint = [False, False]
         try:
-            data = self.pptEditor.getSlideTextData(int(self.config[propertyName][dataNameHeader + "Index"]) + self.slideOffset)
+            data = self.gEditor.getSlideTextData(int(self.config[propertyName][dataNameHeader + "Index"]) + self.slideOffset)
             for item in data:
                 if '{Title}' in item[1]:
                     checkPoint[0] = True
@@ -229,7 +219,7 @@ class SlideMaker:
                         underlined=self.str2bool(self.config[propertyName][dataNameHeader + "DateUnderlined"]),
                         alignment=self.config[propertyName][dataNameHeader + "DateAlignment"])
 
-                    self.pptEditor.setTextSuperScript(item[0], cordinalIndex, cordinalIndex + 2)
+                    self.gEditor.setTextSuperScript(item[0], cordinalIndex, cordinalIndex + 2)
         except Exception:
             print(f"\tERROR: {traceback.format_exc()}")
             return False
@@ -238,14 +228,18 @@ class SlideMaker:
             print(f"\tERROR : {checkPoint.count(True)} out of {len(checkPoint)} text placeholders found.")
             return False
 
-        return self.pptEditor.commitSlideChanges()
+        return self.gEditor.commitSlideChanges()
 
     def _hymnSlide(self, source: str, slideIndex: int) -> bool:
         if (not self.hymnMaker.setSource(source)):
             print(f"\tERROR: Hymn [{source}] not found.")
             return False
 
-        [titleList, lyricsList] = self.hymnMaker.getContent()
+        [titleList, formattedLyricsList, source] = self.hymnMaker.getContent()
+
+        # Log if is sourced from the web
+        if source == "Web":
+            self.gEditor.writeLog(self.gEditor.LogType.Info, f"SlideMaker - Hymn web source lookup: [{source}]")
 
         # Title font size adjustments and decide if the lyrics text box needs to be shifted
         titleFontSize = int(self.config["HYMN_PROPERTIES"]["HymnTitleTextSize"])
@@ -266,10 +260,10 @@ class SlideMaker:
                 print(f"  MULTILINE FORMAT DEFAULT : {titleLength}, {maxCharUnitLength}, {minCharUnitLength}")
 
         # Generate create duplicate request and commit it
-        sourceSlideID = self.pptEditor.getSlideID(slideIndex)
+        sourceSlideID = self.gEditor.getSlideID(slideIndex)
         for i in range(len(titleList) - 1):  # Recall that the original source slide remains
-            self.pptEditor.duplicateSlide(sourceSlideID, sourceSlideID + '_d' + str(i))
-        if (not self.pptEditor.commitSlideChanges()):
+            self.gEditor.duplicateSlide(sourceSlideID, sourceSlideID + '_d' + str(i))
+        if (not self.gEditor.commitSlideChanges()):
             return False
 
         # Update offset
@@ -278,7 +272,7 @@ class SlideMaker:
         # Insert title and lyrics data
         for i in range(slideIndex, slideIndex + len(titleList)):
             checkPoint = [False, False]
-            data = self.pptEditor.getSlideTextData(i)
+            data = self.gEditor.getSlideTextData(i)
             try:
                 for item in data:
                     if ('{Title}' in item[1]):
@@ -295,7 +289,7 @@ class SlideMaker:
                         checkPoint[1] = True
                         self._insertText(
                             objectID=item[0],
-                            text=lyricsList[i - slideIndex],
+                            text=formattedLyricsList[i - slideIndex],
                             size=int(self.config["HYMN_PROPERTIES"]["HymnTextSize"]),
                             bold=self.str2bool(self.config["HYMN_PROPERTIES"]["HymnBolded"]),
                             italic=self.str2bool(self.config["HYMN_PROPERTIES"]["HymnItalicized"]),
@@ -303,7 +297,7 @@ class SlideMaker:
                             alignment=self.config["HYMN_PROPERTIES"]["HymnAlignment"])
 
                         if (multiLineTitle):
-                            self.pptEditor.updatePageElementTransform(item[0], translateY=int(self.config["HYMN_PROPERTIES"]["HymnLoweredUnitHeight"]))
+                            self.gEditor.updatePageElementTransform(item[0], translateY=int(self.config["HYMN_PROPERTIES"]["HymnLoweredUnitHeight"]))
             except Exception:
                 print(f"\tERROR: {traceback.format_exc()}")
                 return False
@@ -312,7 +306,7 @@ class SlideMaker:
                 print(f"\tERROR: {checkPoint.count(True)} out of {len(checkPoint)} text placeholders found.")
                 return False
 
-        return self.pptEditor.commitSlideChanges()
+        return self.gEditor.commitSlideChanges()
 
     def _scriptureSingleSlide(self, title: str, source: str, charPerLine: int, propertyName: str, dataNameHeader: str, nextWeek: bool = False) -> bool:
         # Assumes monthly scripture is short enough to fit in one slide
@@ -328,7 +322,7 @@ class SlideMaker:
 
         checkPoint = [False, False]
         try:
-            data = self.pptEditor.getSlideTextData(int(self.config[propertyName][dataNameHeader + nextWeekString + "Index"]) + self.slideOffset)
+            data = self.gEditor.getSlideTextData(int(self.config[propertyName][dataNameHeader + nextWeekString + "Index"]) + self.slideOffset)
             for item in data:
                 if '{Title}' in item[1]:
                     checkPoint[0] = True
@@ -353,10 +347,10 @@ class SlideMaker:
 
                     # Superscript and bold the verse numbers, and set paragraph spacing between the verses
                     for ssRange in ssIndexList:
-                        self.pptEditor.setTextSuperScript(item[0], ssRange[1], ssRange[2])
-                        self.pptEditor.setBold(item[0], ssRange[1], ssRange[2])
-                        if (ssRange[1] > 0 and ssRange[0] == SSType.VerseNumber):  # No need for paragraph spacing in initial line
-                            self.pptEditor.setSpaceAbove(item[0], ssRange[1], 10)
+                        self.gEditor.setTextSuperScript(item[0], ssRange[1], ssRange[2])
+                        self.gEditor.setBold(item[0], ssRange[1], ssRange[2])
+                        if (ssRange[1] > 0 and ssRange[0] == self.verseMaker.SSType.VerseNumber):  # No need for paragraph spacing in initial line
+                            self.gEditor.setSpaceAbove(item[0], ssRange[1], 10)
         except Exception:
             print(f"\tERROR: {traceback.format_exc()}")
             return False
@@ -365,7 +359,7 @@ class SlideMaker:
             print(f"\tERROR: {checkPoint.count(True)} out of {len(checkPoint)} text placeholders found.")
             return False
 
-        return self.pptEditor.commitSlideChanges()
+        return self.gEditor.commitSlideChanges()
 
     def _scriptureMultiSlide(self, source: str, maxLineLength: int, maxLinesPerSlide: int, propertyName: str, dataNameHeader: str) -> bool:
         # Assumes monthly scripture is short enough to fit in one slide
@@ -377,11 +371,11 @@ class SlideMaker:
 
         # Generate create duplicate request and commit it
         slideIndex = int(self.config[propertyName][dataNameHeader + "Index"]) + self.slideOffset
-        sourceSlideID = self.pptEditor.getSlideID(slideIndex)
+        sourceSlideID = self.gEditor.getSlideID(slideIndex)
         for i in range(len(slideVersesList) - 1):  # Recall that the original source slide remains
-            self.pptEditor.duplicateSlide(
+            self.gEditor.duplicateSlide(
                 sourceSlideID, sourceSlideID + '_' + str(i))
-        if (not self.pptEditor.commitSlideChanges()):
+        if (not self.gEditor.commitSlideChanges()):
             return False
 
         # Update offset
@@ -394,7 +388,7 @@ class SlideMaker:
         for i in range(slideIndex, slideIndex + len(slideVersesList)):
             checkPoint = [False, False]
             try:
-                data = self.pptEditor.getSlideTextData(i)
+                data = self.gEditor.getSlideTextData(i)
                 for item in data:
                     if '{Title}' in item[1]:
                         checkPoint[0] = True
@@ -419,10 +413,10 @@ class SlideMaker:
 
                         # Superscript and bold the verse numbers, and set paragraph spacing between the verses
                         for ssRange in slideSSIndexList[i - slideIndex]:
-                            self.pptEditor.setTextSuperScript(item[0], ssRange[1], ssRange[2])
-                            self.pptEditor.setBold(item[0], ssRange[1], ssRange[2])
-                            if (ssRange[1] > 0 and ssRange[0] == SSType.VerseNumber):  # No need for paragraph spacing in initial line
-                                self.pptEditor.setSpaceAbove(item[0], ssRange[1], paragraphSpace)
+                            self.gEditor.setTextSuperScript(item[0], ssRange[1], ssRange[2])
+                            self.gEditor.setBold(item[0], ssRange[1], ssRange[2])
+                            if (ssRange[1] > 0 and ssRange[0] == self.verseMaker.SSType.VerseNumber):  # No need for paragraph spacing in initial line
+                                self.gEditor.setSpaceAbove(item[0], ssRange[1], paragraphSpace)
             except Exception:
                 print(f"\tERROR: {traceback.format_exc()}")
                 return False
@@ -431,12 +425,12 @@ class SlideMaker:
                 print(f"\tERROR: {checkPoint.count(True)} out of {len(checkPoint)} text placeholders found.")
                 return False
 
-        return self.pptEditor.commitSlideChanges()
+        return self.gEditor.commitSlideChanges()
 
     def _sermonHeaderSlide(self, title: str, speaker: str, propertyName: str, dataNameHeader: str) -> bool:
         checkPoint = [False, False]
         try:
-            data = self.pptEditor.getSlideTextData(int(self.config[propertyName][dataNameHeader + "Index"]) + self.slideOffset)
+            data = self.gEditor.getSlideTextData(int(self.config[propertyName][dataNameHeader + "Index"]) + self.slideOffset)
             for item in data:
                 if '{Title}' in item[1]:
                     checkPoint[0] = True
@@ -466,13 +460,13 @@ class SlideMaker:
             print(f"\tERROR : {checkPoint.count(True)} out of {len(checkPoint)} text placeholders found.")
             return False
 
-        return self.pptEditor.commitSlideChanges()
+        return self.gEditor.commitSlideChanges()
 
     def _headerOnlySlide(self, title: str, propertyName: str, dataNameHeader: str, nextWeek: bool = False) -> bool:
         nextWeekString = "NextWeek" if nextWeek else ""
         checkPoint = [False]
         try:
-            data = self.pptEditor.getSlideTextData(int(self.config[propertyName][dataNameHeader + nextWeekString + "Index"]) + self.slideOffset)
+            data = self.gEditor.getSlideTextData(int(self.config[propertyName][dataNameHeader + nextWeekString + "Index"]) + self.slideOffset)
             for item in data:
                 if '{Title}' in item[1]:
                     checkPoint[0] = True
@@ -492,17 +486,17 @@ class SlideMaker:
             print(f"\tERROR : {checkPoint.count(True)} out of {len(checkPoint)} text placeholders found.")
             return False
 
-        return self.pptEditor.commitSlideChanges()
+        return self.gEditor.commitSlideChanges()
 
     # ======================================================================================================
     # ============================================ TOOLS ===================================================
     # ======================================================================================================
 
     def _deleteSlide(self, slideIndex: int) -> bool:
-        sourceSlideID = self.pptEditor.getSlideID(slideIndex)
-        self.pptEditor.deleteSlide(sourceSlideID)
+        sourceSlideID = self.gEditor.getSlideID(slideIndex)
+        self.gEditor.deleteSlide(sourceSlideID)
 
-        if (not self.pptEditor.commitSlideChanges()):
+        if (not self.gEditor.commitSlideChanges()):
             return False
 
         self.slideOffset -= 1
@@ -514,12 +508,12 @@ class SlideMaker:
         return boolString.lower() in ("yes", "true", "t", "1")
 
     def _openSlideInBrowser(self) -> None:
-        self.pptEditor.openSlideInBrowser()
+        self.gEditor.openSlideInBrowser()
 
     def _insertText(self, objectID: str, text: str, size: int, bold: bool, italic: bool, underlined: bool, alignment: str, linespacing: int = -1) -> None:
-        self.pptEditor.setText(objectID, text)
-        self.pptEditor.setTextStyle(objectID, bold, italic, underlined, size)
-        self.pptEditor.setParagraphStyle(objectID, self.lineSpacing if linespacing < 0 else linespacing, alignment)
+        self.gEditor.setText(objectID, text)
+        self.gEditor.setTextStyle(objectID, bold, italic, underlined, size)
+        self.gEditor.setParagraphStyle(objectID, self.lineSpacing if linespacing < 0 else linespacing, alignment)
 
     def _getVisualLength(self, text: str) -> int:
         # A precise measurement to indicate if text will align or will take up multiple lines
@@ -536,35 +530,29 @@ if __name__ == '__main__':
 
     mode = ""
     while (mode != "q"):
-        type = PPTMode.Null
+        pptType = PPTMode.Null
         mode = input("Input: ")
         if (len(mode) > 0):
             if (mode == "s"):
-                type = PPTMode.Stream
+                pptType = PPTMode.Stream
             elif (mode == "p"):
-                type = PPTMode.Projected
+                pptType = PPTMode.Projected
             elif (mode == "r"):
-                type = PPTMode.Regular
+                pptType = PPTMode.Regular
             elif (mode == "-t"):
                 sm = SlideMaker()
-                input = r' '.join(sys.argv[2:])
-                print(f"String Visual Length of '{input}' = {sm._getVisualLength(input)} Units")
+                inputStr = r' '.join(sys.argv[2:])
+                print(f"String Visual Length of '{inputStr}' = {sm._getVisualLength(inputStr)} Units")
 
-        if (type != PPTMode.Null):
+        if (pptType != PPTMode.Null):
             start = time.time()
 
             print("\nINITIALIZING...")
             sm = SlideMaker()
 
-            sm.setType(type)
+            sm.setType(pptType)
 
-            strType = ""
-            if (type == PPTMode.Stream):
-                strType = "Stream"
-            elif (type == PPTMode.Projected):
-                strType = "Projected"
-            elif (type == PPTMode.Regular):
-                strType = "Regular"
+            strType = pptType.name
 
             print(f"CREATING {strType.upper()} SLIDES...")
             print("  sundayServiceSlide() : ", sm.sundayServiceSlide())

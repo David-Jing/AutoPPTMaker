@@ -57,7 +57,7 @@ class HymnMaker:
             for i in range(1, slides + 1):
                 titleList.append(f'{self.hymnTitle.upper()} ({i}/{slides})')
 
-        return [titleList, formattedLyricsList]
+        return [titleList, formattedLyricsList, self.hymn["source"]]
 
     # ==============================================================================================
     # ========================================= FORMATTER ==========================================
@@ -269,7 +269,7 @@ class HymnMaker:
 
 
 if __name__ == '__main__':
-    # python HymnMaker.py [hymn name]
+    # python HymnMaker.py [type] [hymn name]
     type = ""
     if (len(sys. argv) > 2):
         if (sys.argv[1] == "-s"):
@@ -284,7 +284,7 @@ if __name__ == '__main__':
 
         if (hm.setSource(' '.join(sys.argv[2:]))):
             print(hm.hymn["title"] + "\n")
-            [titleList, formattedLyricsList] = hm.getContent()
+            [titleList, formattedLyricsList, _] = hm.getContent()
             for i in range(len(formattedLyricsList)):
                 print("-----------" + titleList[i] + "-----------")
                 print(formattedLyricsList[i])

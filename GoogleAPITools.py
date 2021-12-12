@@ -6,6 +6,7 @@ import datetime
 import webbrowser
 import googleapiclient
 import pytz
+import getpass
 
 from typing import List, Tuple
 from datetime import timedelta
@@ -24,33 +25,42 @@ Tools to manipulate/retrieve Google Slide elements and Google Drive files.
 '''
 
 
-class DateFormatMode(Enum):
-    # Specifies the string format outputted by getFormattedNextSundayDate()
-    Full = 0
-    Short = 1
-
-
 class GoogleAPITools:
+    class LogType(Enum):
+        # Specifies the type of log, types consists of either "Verbose", "Warning", or "Error"
+        #   Info - For debugging and stuff, no serious issues here
+        #   Warning - Something to take note of, does not negatively affects operation
+        #   Error   - Something that hinders operation
+        Info = 0
+        Warning = 1
+        Error = 2
+
+    class DateFormatMode(Enum):
+        # Specifies the string format outputted by getFormattedNextSundayDate()
+        Full = 0
+        Short = 1
+
     def __init__(self, type: str) -> None:
         # If modifying these scopes, delete the file token.json.
         self.scope = ['https://www.googleapis.com/auth/presentations',
+                      'https://www.googleapis.com/auth/spreadsheets',
                       'https://www.googleapis.com/auth/drive']
 
         # The ID of the source slide.
         if not os.path.exists("Data/" + type + "SlideProperties.ini"):
             raise IOError(f"ERROR : {type}SlideProperties.ini config file cannot be found.")
-        self.config = configparser.ConfigParser()
-        self.config.read("Data/" + type + "SlideProperties.ini")
-        self.sourceSlideID = self.config["SLIDE_PROPERTIES"][type + "SourceSlideID"]
+        config = configparser.ConfigParser()
+        config.read("Data/" + type + "SlideProperties.ini")
+        self.sourceSlideID = config["SLIDE_PROPERTIES"][type + "SourceSlideID"]
 
         # Retrieve global configuration
         if not os.path.exists("Data/GlobalProperties.ini"):
             raise IOError(f"ERROR : GlobalProperties.ini config file cannot be found.")
-        self.config = configparser.ConfigParser()
-        self.config.read("Data/GlobalProperties.ini")
+        self.globalConfig = configparser.ConfigParser()
+        self.globalConfig.read("Data/GlobalProperties.ini")
 
-        # Get access to the slide and drive
-        [self.slideService, self.driveService] = self.getAPIServices()
+        # Get access to the slide, sheet, and drive
+        [self.slideService, self.sheetService, self.driveService] = self.getAPIServices()
 
         # Get rid of previously made slides
         self.removePreviousSlides()
@@ -93,9 +103,10 @@ class GoogleAPITools:
                 token.write(creds.to_json())
 
         slideService = build('slides', 'v1', credentials=creds)
+        sheetService = build('sheets', 'v4', credentials=creds)
         driveService = build('drive', 'v3', credentials=creds)
 
-        return [slideService, driveService]
+        return [slideService, sheetService, driveService]
 
     def commitSlideChanges(self) -> bool:
         # Commit changes to slides, reset requests, and update data
@@ -105,7 +116,7 @@ class GoogleAPITools:
                 self.slideService.presentations().batchUpdate(
                     presentationId=self.newSlideID, body={'requests': self.requests}).execute()
             except errors.HttpError as error:
-                print(f"\tAn error occurred on slide commit: {error}")
+                print(f"\tERROR: An error occurred on committing slide changes; {error}")
                 successfulCommit = False
 
         self.requests = []
@@ -208,6 +219,36 @@ class GoogleAPITools:
                                                                            "translateX": translateX, "translateY": translateY, "unit": "EMU"}}})
 
     # ==========================================================================================
+    # =================================== SPREADSHEET GETTERS ==================================
+    # ==========================================================================================
+
+    def getAnnouncements(self) -> List[List[str]]:
+        # Get announcement entries from Google Sheet
+        sheetID = self.globalConfig["SLIDE_MAKER_SHEET"]["SlideMakerSheetFileID"]
+        dataRange = self.globalConfig["SLIDE_MAKER_SHEET"]["SlideMakerSheetAnnouncementsRange"]
+
+        try:
+            response = self.sheetService.spreadsheets().values().get(spreadsheetId=sheetID, range=dataRange).execute()
+            return response["values"]
+        except errors.HttpError as error:
+            print(f"\tERROR: An error occurred on retrieving announcement data; {error}")
+
+        return []
+
+    def getSupplications(self) -> List[List[str]]:
+        # Get supplication entries from Google Sheet
+        sheetID = self.globalConfig["SLIDE_MAKER_SHEET"]["SlideMakerSheetFileID"]
+        dataRange = self.globalConfig["SLIDE_MAKER_SHEET"]["SlideMakerSheetSupplicationsRange"]
+
+        try:
+            response = self.sheetService.spreadsheets().values().get(spreadsheetId=sheetID, range=dataRange).execute()
+            return response["values"]
+        except errors.HttpError as error:
+            print(f"\tERROR: An error occurred on retrieving supplication data; {error}")
+
+        return []
+
+    # ==========================================================================================
     # ====================================== MISC GETTERS ======================================
     # ==========================================================================================
 
@@ -221,7 +262,7 @@ class GoogleAPITools:
         # Get formatted string with the date of next Sunday
         dt = self.getNextSundayDate()
 
-        month = dt.strftime('%B') if type == DateFormatMode.Full else dt.strftime('%b')
+        month = dt.strftime('%B') if type == self.DateFormatMode.Full else dt.strftime('%b')
         day = dt.strftime('%d')
         year = dt.strftime('%Y')
 
@@ -238,7 +279,7 @@ class GoogleAPITools:
 
     def getUpcomingSlideTitle(self, type: str) -> str:
         # Get slide file name for upcoming Sunday
-        dt = self.getFormattedNextSundayDate(DateFormatMode.Short)[0]
+        dt = self.getFormattedNextSundayDate(self.DateFormatMode.Short)[0]
         return f'Sunday Worship Slides {dt} - {type}'
 
     def openSlideInBrowser(self) -> None:
@@ -260,7 +301,7 @@ class GoogleAPITools:
                         # Get rid of the new line symbol in the ID
                         self.driveService.files().delete(fileId=line[:-1]).execute()
                     except errors.HttpError as error:
-                        print(f"WARNING : An error occurred on slide removal: {error}")
+                        print(f"ERROR : An error occurred on slide removal; {error}")
 
                 # Clear out the file
                 f.truncate(0)
@@ -271,8 +312,11 @@ class GoogleAPITools:
             'name': self.getUpcomingSlideTitle(type)
         }
 
-        drive_response = self.driveService.files().copy(
-            fileId=self.sourceSlideID, body=body).execute()
+        try:
+            drive_response = self.driveService.files().copy(
+                fileId=self.sourceSlideID, body=body).execute()
+        except errors.HttpError as error:
+            print(f"ERROR : An error occurred on slide duplication; {error}")
 
         # Write ID to file, so it can be deleted later
         id = drive_response.get('id')
@@ -287,35 +331,80 @@ class GoogleAPITools:
 
     def updateHymnDataBase(self) -> None:
         # Lookup latest HymnDatabase file on Google Drive, replace local copy if local copy is older
-        folderId = self.config["HYMN_DATABASE_PROPERTIES"]["HymnDataBaseSharedFolderID"]
-        response = self.driveService.files().list(supportsAllDrives=True,
-                                                  includeItemsFromAllDrives=True,
-                                                  q=f"parents in '{folderId}' and trashed = false",
-                                                  fields="nextPageToken,files(id, name, modifiedTime)").execute()
-        for dFile in response.get('files', []):
-            if dFile['name'] == 'HymnDatabase.db':
-                file_id = dFile['id']
+        try:
+            fileID = self.globalConfig["HYMN_DATABASE_PROPERTIES"]["HymnDataBaseFileID"]
+            filedDetails = self.driveService.files().get(fileId=fileID,
+                                                         fields="modifiedTime").execute()
 
-                # Get modified date of DataBase.db file and compare
-                localModifiedDate = pytz.utc.localize(datetime.datetime.min)
-                driveModifiedDate = pytz.utc.localize(datetime.datetime.strptime(dFile['modifiedTime'], '%Y-%m-%dT%H:%M:%S.%fZ'))
+            # Get modified date of DataBase.db file and compare
+            localModifiedDate = pytz.utc.localize(datetime.datetime.min)
+            driveModifiedDate = pytz.utc.localize(datetime.datetime.strptime(filedDetails['modifiedTime'], '%Y-%m-%dT%H:%M:%S.%fZ'))
 
-                if os.path.exists("Data/HymnDatabase.db"):
-                    localModifiedDate = datetime.datetime.fromtimestamp(os.path.getmtime("Data/HymnDatabase.db"), datetime.timezone.utc)
+            if os.path.exists("Data/HymnDatabase.db"):
+                localModifiedDate = datetime.datetime.fromtimestamp(os.path.getmtime("Data/HymnDatabase.db"), datetime.timezone.utc)
 
-                # Overwrite local file
-                if localModifiedDate < driveModifiedDate:
-                    request = self.driveService.files().get_media(fileId=file_id)
-                    with open("Data/HymnDatabase.db", "wb") as f:
-                        downloader = MediaIoBaseDownload(f, request)
-                        done = False
-                        while done is False:
-                            status, done = downloader.next_chunk()
-                            print("UPDATING HYMN DATABASE : %d%%" % int(status.progress() * 100))
+            # Overwrite local file
+            if localModifiedDate < driveModifiedDate:
+                self.writeLog(self.LogType.Info, f"GoogleAPITools - Updating local hymn database from [{localModifiedDate}] to [{driveModifiedDate}]")
+                request = self.driveService.files().get_media(fileId=fileID)
+                with open("Data/HymnDatabase.db", "wb") as f:
+                    downloader = MediaIoBaseDownload(f, request)
+                    done = False
+                    while done is False:
+                        status, done = downloader.next_chunk()
+                        print("UPDATING HYMN DATABASE : %d%%" % int(status.progress() * 100))
+        except errors.HttpError as error:
+            print(f"ERROR : An error occurred on updating local hymn database; {error}")
 
-                return
+    # ==========================================================================================
+    # ======================================== LOGGING =========================================
+    # ==========================================================================================
+
+    def writeLog(self, logType: LogType, msg: str) -> None:
+        # Log entries into a Google Sheet file; logType consists of either "Verbose", "Warning", or "Error"
+        sheetID = self.globalConfig["SLIDE_MAKER_SHEET"]["SlideMakerSheetFileID"]
+        loggingSheetID = self.globalConfig["SLIDE_MAKER_SHEET"]["SlideMakerSheetLoggingSheetID"]
+
+        # Logging info
+        date = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        user = getpass.getuser()
+        msg = "=\"" + msg.replace("\n", "\"&char(10)&\"") + "\""
+
+        # Create new row and insert data
+        batchUpdateRequest = {
+            "requests": [
+                {
+                    "insertRange": {
+                        "range": {
+                            "sheetId": loggingSheetID,
+                            "startRowIndex": 1,
+                            "endRowIndex": 2
+                        },
+                        "shiftDimension": "ROWS"
+                    }
+                },
+                {
+                    "pasteData": {
+                        "data": f"{date}¬ {logType.name}¬ {user}¬ {msg}",
+                        "type": "PASTE_NORMAL",
+                        "delimiter": "¬",
+                        "coordinate": {
+                            "sheetId": loggingSheetID,
+                            "rowIndex": 1
+                        }
+                    }
+                }
+            ]
+        }
+
+        try:
+            self.sheetService.spreadsheets().batchUpdate(spreadsheetId=sheetID, body=batchUpdateRequest).execute()
+        except errors.HttpError as error:
+            print(f"\tERROR: An error occurred on logging data; {error}")
 
 
 if __name__ == '__main__':
-    pe = GoogleAPITools('Stream')
-    pe.updateHymnDataBase()
+    peS = GoogleAPITools('Stream')
+    peR = GoogleAPITools('Regular')
+    print(peS.getAnnouncements())
+    print(peR.getSupplications())
