@@ -6,7 +6,6 @@ import datetime
 import webbrowser
 import googleapiclient
 import pytz
-import getpass
 
 from typing import List, Tuple
 from datetime import timedelta
@@ -18,6 +17,8 @@ from google.oauth2.credentials import Credentials
 from apiclient import errors
 from enum import Enum
 
+from Logging import Logging
+
 '''
 
 Tools to manipulate/retrieve Google Slide elements and Google Drive files.
@@ -26,15 +27,6 @@ Tools to manipulate/retrieve Google Slide elements and Google Drive files.
 
 
 class GoogleAPITools:
-    class LogType(Enum):
-        # Specifies the type of log, types consists of either "Verbose", "Warning", or "Error"
-        #   Info - For debugging and stuff, no serious issues here
-        #   Warning - Something to take note of, does not negatively affects operation
-        #   Error   - Something that hinders operation
-        Info = 0
-        Warning = 1
-        Error = 2
-
     class DateFormatMode(Enum):
         # Specifies the string format outputted by getFormattedNextSundayDate()
         Full = 0
@@ -116,7 +108,7 @@ class GoogleAPITools:
                 self.slideService.presentations().batchUpdate(
                     presentationId=self.newSlideID, body={'requests': self.requests}).execute()
             except errors.HttpError as error:
-                print(f"\tERROR: An error occurred on committing slide changes; {error}")
+                print(f"\tERROR : An error occurred on committing slide changes; {error}")
                 successfulCommit = False
 
         self.requests = []
@@ -207,6 +199,11 @@ class GoogleAPITools:
                                                        "style": {"spaceAbove": {"magnitude": units, "unit": "PT"}},
                                                        "fields": "spaceAbove"}})
 
+    def setParagraphBullet(self, objectID: str, startIndex: int, endIndex: int) -> None:
+        # Add digit paragraph bullets to each paragraph
+        self.requests.append({"createParagraphBullets": {"objectId": objectID,
+                                                         "textRange": {"type": "FIXED_RANGE", "startIndex": startIndex, "endIndex": endIndex}}})
+
     # ==========================================================================================
     # ================================= SLIDE FORMAT UPDATERS ==================================
     # ==========================================================================================
@@ -222,29 +219,33 @@ class GoogleAPITools:
     # =================================== SPREADSHEET GETTERS ==================================
     # ==========================================================================================
 
-    def getAnnouncements(self) -> List[List[str]]:
+    def getAnnouncements(self) -> List[str]:
         # Get announcement entries from Google Sheet
         sheetID = self.globalConfig["SLIDE_MAKER_SHEET"]["SlideMakerSheetFileID"]
         dataRange = self.globalConfig["SLIDE_MAKER_SHEET"]["SlideMakerSheetAnnouncementsRange"]
 
         try:
             response = self.sheetService.spreadsheets().values().get(spreadsheetId=sheetID, range=dataRange).execute()
-            return response["values"]
+
+            # Flatten the nested list
+            return [val for sublist in response["values"] for val in sublist]
         except errors.HttpError as error:
-            print(f"\tERROR: An error occurred on retrieving announcement data; {error}")
+            print(f"\tERROR : An error occurred on retrieving announcement data; {error}")
 
         return []
 
-    def getSupplications(self) -> List[List[str]]:
+    def getSupplications(self) -> List[str]:
         # Get supplication entries from Google Sheet
         sheetID = self.globalConfig["SLIDE_MAKER_SHEET"]["SlideMakerSheetFileID"]
         dataRange = self.globalConfig["SLIDE_MAKER_SHEET"]["SlideMakerSheetSupplicationsRange"]
 
         try:
             response = self.sheetService.spreadsheets().values().get(spreadsheetId=sheetID, range=dataRange).execute()
-            return response["values"]
+
+            # Flatten the nested list
+            return [val for sublist in response["values"] for val in sublist]
         except errors.HttpError as error:
-            print(f"\tERROR: An error occurred on retrieving supplication data; {error}")
+            print(f"\tERROR : An error occurred on retrieving supplication data; {error}")
 
         return []
 
@@ -312,6 +313,7 @@ class GoogleAPITools:
             'name': self.getUpcomingSlideTitle(type)
         }
 
+        drive_response = {}
         try:
             drive_response = self.driveService.files().copy(
                 fileId=self.sourceSlideID, body=body).execute()
@@ -319,11 +321,11 @@ class GoogleAPITools:
             print(f"ERROR : An error occurred on slide duplication; {error}")
 
         # Write ID to file, so it can be deleted later
-        id = drive_response.get('id')
+        newID = str(drive_response.get('id'))
         with open("Data/SlideIDList.txt", "a") as f:
-            f.write(id + "\n")
+            f.write(newID + "\n")
 
-        return id
+        return newID
 
     # ==========================================================================================
     # =================================== LOCAL CHANGE TOOLS ===================================
@@ -345,7 +347,7 @@ class GoogleAPITools:
 
             # Overwrite local file
             if localModifiedDate < driveModifiedDate:
-                self.writeLog(self.LogType.Info, f"GoogleAPITools - Updating local hymn database from [{localModifiedDate}] to [{driveModifiedDate}]")
+                Logging.writeLog(Logging.LogType.Info, f"GoogleAPITools - Updating local hymn database from [{localModifiedDate}] to [{driveModifiedDate}]")
                 request = self.driveService.files().get_media(fileId=fileID)
                 with open("Data/HymnDatabase.db", "wb") as f:
                     downloader = MediaIoBaseDownload(f, request)
@@ -356,55 +358,17 @@ class GoogleAPITools:
         except errors.HttpError as error:
             print(f"ERROR : An error occurred on updating local hymn database; {error}")
 
-    # ==========================================================================================
-    # ======================================== LOGGING =========================================
-    # ==========================================================================================
-
-    def writeLog(self, logType: LogType, msg: str) -> None:
-        # Log entries into a Google Sheet file; logType consists of either "Verbose", "Warning", or "Error"
-        sheetID = self.globalConfig["SLIDE_MAKER_SHEET"]["SlideMakerSheetFileID"]
-        loggingSheetID = self.globalConfig["SLIDE_MAKER_SHEET"]["SlideMakerSheetLoggingSheetID"]
-
-        # Logging info
-        date = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        user = getpass.getuser()
-        msg = "=\"" + msg.replace("\n", "\"&char(10)&\"") + "\""
-
-        # Create new row and insert data
-        batchUpdateRequest = {
-            "requests": [
-                {
-                    "insertRange": {
-                        "range": {
-                            "sheetId": loggingSheetID,
-                            "startRowIndex": 1,
-                            "endRowIndex": 2
-                        },
-                        "shiftDimension": "ROWS"
-                    }
-                },
-                {
-                    "pasteData": {
-                        "data": f"{date}¬ {logType.name}¬ {user}¬ {msg}",
-                        "type": "PASTE_NORMAL",
-                        "delimiter": "¬",
-                        "coordinate": {
-                            "sheetId": loggingSheetID,
-                            "rowIndex": 1
-                        }
-                    }
-                }
-            ]
-        }
-
-        try:
-            self.sheetService.spreadsheets().batchUpdate(spreadsheetId=sheetID, body=batchUpdateRequest).execute()
-        except errors.HttpError as error:
-            print(f"\tERROR: An error occurred on logging data; {error}")
-
 
 if __name__ == '__main__':
     peS = GoogleAPITools('Stream')
-    peR = GoogleAPITools('Regular')
-    print(peS.getAnnouncements())
-    print(peR.getSupplications())
+
+    anns = peS.getAnnouncements()
+    sups = peS.getSupplications()
+
+    for ann in anns:
+        print(ann)
+        print("---------------------")
+
+    for sup in sups:
+        print(sup)
+        print("---------------------")

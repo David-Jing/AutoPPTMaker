@@ -4,10 +4,10 @@ import re
 import sys
 import os
 
-import matplotlib
+from typing import Any, List
+
 from LookupTools import LookupTools
-from matplotlib.afm import AFM
-from typing import List
+from Utility import Utility
 
 '''
 
@@ -32,10 +32,6 @@ class HymnMaker:
         self.minLines = int(config["HYMN_PROPERTIES"]["HymnMinLines"])
         self.maxLineLength = int(config["HYMN_PROPERTIES"]["HymnMaxLineUnitLength"])
 
-        # For finding visual lengths of text strings
-        afm_filename = os.path.join(matplotlib.get_data_path(), 'fonts', 'afm', 'ptmr8a.afm')
-        self.afm = AFM(open(afm_filename, "rb"))
-
     def setSource(self, hymnTitle: str) -> bool:
         if (hymnTitle == ""):
             return False
@@ -45,7 +41,7 @@ class HymnMaker:
 
         return (self.hymn["title"] != "Not Found" and self.hymn["lyrics"] != "Not Found")
 
-    def getContent(self) -> List[List[str]]:
+    def getContent(self) -> List[Any]:
         titleList = []
         formattedLyricsList = []
 
@@ -208,7 +204,7 @@ class HymnMaker:
 
             j = 0
             while j < len(lineList):
-                if self._getVisualLength(lineList[j]) > self.maxLineLength:
+                if Utility.getVisualLength(lineList[j]) > self.maxLineLength:
                     splitIndex = -1
 
                     # Split at comma
@@ -257,11 +253,6 @@ class HymnMaker:
 
         # Remove new lines before and after text
         return verse.strip() + "\n"
-
-    def _getVisualLength(self, text: str) -> int:
-        # A precise measurement to indicate if text will align or will take up multiple lines
-        text = ''.join([i if ord(i) < 128 else ' ' for i in text])  # Replace all non-ascii characters
-        return int(self.afm.string_width_height(text)[0])
 
 # ==============================================================================================
 # ============================================ TESTER ==========================================

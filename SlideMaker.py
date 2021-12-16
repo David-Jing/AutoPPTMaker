@@ -2,14 +2,17 @@ import configparser
 import os
 import sys
 import time
-import matplotlib
 import traceback
+
+from typing import List
+from enum import Enum
 
 from HymnMaker import HymnMaker
 from GoogleAPITools import GoogleAPITools
+from ListMaker import ListMaker
+from Logging import Logging
+from Utility import Utility
 from VerseMaker import VerseMaker
-from enum import Enum
-from matplotlib.afm import AFM
 
 '''
 
@@ -17,18 +20,15 @@ Core class of the SlideMaker application, assembles all other classes to generat
 
 '''
 
-VersionNumber = "1.1.0"
-
-
-class PPTMode(Enum):
-    # Specifies the PPT output format
-    Null = -1
-    Stream = 0
-    Projected = 1
-    Regular = 2
-
 
 class SlideMaker:
+    class PPTMode(Enum):
+        # Specifies the PPT output format
+        Null = -1
+        Stream = 0
+        Projected = 1
+        Regular = 2
+
     def __init__(self) -> None:
         # Offset for when creating new slides
         self.slideOffset = 0
@@ -39,10 +39,6 @@ class SlideMaker:
         self.input = configparser.ConfigParser()
         self.input.read("SlideInputs.ini")
 
-        # For finding visual lengths of text strings
-        afm_filename = os.path.join(matplotlib.get_data_path(), 'fonts', 'afm', 'ptmr8a.afm')
-        self.afm = AFM(open(afm_filename, "rb"))
-
     def setType(self, pptType: PPTMode) -> None:
         strType = pptType.name
 
@@ -52,6 +48,9 @@ class SlideMaker:
         self.gEditor = GoogleAPITools(strType)
         self.verseMaker = VerseMaker(strType)
         self.hymnMaker = HymnMaker(strType)
+
+        # Initialize logging
+        Logging.initializeLoggingService()
 
         # Access slide property data
         self.config = configparser.ConfigParser()
@@ -79,7 +78,9 @@ class SlideMaker:
 
     def announcementSlide(self) -> bool:
         title = self.input["ANNOUNCEMENTS"]["AnnouncementsTitle"].upper()
-        return self._headerOnlySlide(title, "ANNOUNCEMENTS_PROPERTIES", "Announcements")
+        announcementList = self.gEditor.getAnnouncements()
+
+        return self._textMultiSlide(title, announcementList, "ANNOUNCEMENTS_PROPERTIES", "Announcements")
 
     def bibleVerseMemorizationSlide(self, nextWeek: bool = False) -> bool:
         lastWeekString = "LastWeek" if not nextWeek else ""
@@ -93,6 +94,17 @@ class SlideMaker:
     def catechismSlide(self, nextWeek: bool = False) -> bool:
         title = self.input["CATECHISM"]["Catechism" + ("LastWeek" if not nextWeek else "") + "Title"].upper()
         return self._headerOnlySlide(title, "CATECHISM_PROPERTIES", "Catechism", nextWeek)
+
+    def supplicationSlide(self) -> bool:
+        enabled = self.input["SUPPLICATIONS"]["SupplicationsEnabled"].upper()
+        title = self.input["SUPPLICATIONS"]["SupplicationsTitle"].upper()
+        supplicationList = self.gEditor.getSupplications()
+
+        if (enabled == "TRUE"):
+            return self._numListMultiSlide(title, supplicationList, "SUPPLICATIONS_PROPERTIES", "Supplications")
+        else:
+            slideIndex = int(self.config["SUPPLICATIONS_PROPERTIES"]["SupplicationsIndex"]) + self.slideOffset
+            return self._deleteSlide(slideIndex)
 
     def worshipSlide(self) -> bool:
         title = self.input["WORSHIP_HEADER"]["WorshipHeaderTitle"].upper()
@@ -124,7 +136,7 @@ class SlideMaker:
                                           "PRAYER_OF_CONFESSION_PROPERTIES", "PrayerOfConfession")
 
     def holyCommunionSlide(self) -> bool:
-        enabled = self.input["HOLY_COMMUNION"]["HolyCommunionEnabled"].upper()
+        enabled = self.input["HOLY_COMMUNION"]["HolyCommunionSlidesEnabled"].upper()
         slideIndex = int(self.config["HOLY_COMMUNION_PROPERTIES"]["HolyCommunionIndex"]) + self.slideOffset
         numOfSlides = int(self.config["HOLY_COMMUNION_PROPERTIES"]["HolyCommunionSlides"])
 
@@ -159,11 +171,7 @@ class SlideMaker:
 
         # Generate templates for each verse source
         slideIndex = int(self.config["SERMON_VERSE_PROPERTIES"]["SermonVerseIndex"]) + self.slideOffset
-        sourceSlideID = self.gEditor.getSlideID(slideIndex)
-        for i in range(len(sourceList) - 1):  # Recall that the original source slide remains
-            self.gEditor.duplicateSlide(
-                sourceSlideID, sourceSlideID + '_d' + str(i))
-        if (not self.gEditor.commitSlideChanges()):
+        if not self._duplicateSlide(len(sourceList) - 1, slideIndex):
             return False
 
         # Iterate and generate the slides
@@ -204,9 +212,9 @@ class SlideMaker:
                         objectID=item[0],
                         text=title.upper(),
                         size=int(self.config[propertyName][dataNameHeader + "TitleTextSize"]),
-                        bold=self.str2bool(self.config[propertyName][dataNameHeader + "TitleBolded"]),
-                        italic=self.str2bool(self.config[propertyName][dataNameHeader + "TitleItalicized"]),
-                        underlined=self.str2bool(self.config[propertyName][dataNameHeader + "TitleUnderlined"]),
+                        bold=self._str2bool(self.config[propertyName][dataNameHeader + "TitleBolded"]),
+                        italic=self._str2bool(self.config[propertyName][dataNameHeader + "TitleItalicized"]),
+                        underlined=self._str2bool(self.config[propertyName][dataNameHeader + "TitleUnderlined"]),
                         alignment=self.config[propertyName][dataNameHeader + "TitleAlignment"])
                 elif '{Text}' in item[1]:
                     checkPoint[1] = True
@@ -214,14 +222,14 @@ class SlideMaker:
                         objectID=item[0],
                         text=dateString[:-5] + "," + dateString[-5:],   # Add comma between year and date
                         size=int(self.config[propertyName][dataNameHeader + "DateTextSize"]),
-                        bold=self.str2bool(self.config[propertyName][dataNameHeader + "DateBolded"]),
-                        italic=self.str2bool(self.config[propertyName][dataNameHeader + "DateItalicized"]),
-                        underlined=self.str2bool(self.config[propertyName][dataNameHeader + "DateUnderlined"]),
+                        bold=self._str2bool(self.config[propertyName][dataNameHeader + "DateBolded"]),
+                        italic=self._str2bool(self.config[propertyName][dataNameHeader + "DateItalicized"]),
+                        underlined=self._str2bool(self.config[propertyName][dataNameHeader + "DateUnderlined"]),
                         alignment=self.config[propertyName][dataNameHeader + "DateAlignment"])
 
                     self.gEditor.setTextSuperScript(item[0], cordinalIndex, cordinalIndex + 2)
         except Exception:
-            print(f"\tERROR: {traceback.format_exc()}")
+            print(f"\tERROR : {traceback.format_exc()}")
             return False
 
         if (False in checkPoint):
@@ -232,20 +240,20 @@ class SlideMaker:
 
     def _hymnSlide(self, source: str, slideIndex: int) -> bool:
         if (not self.hymnMaker.setSource(source)):
-            print(f"\tERROR: Hymn [{source}] not found.")
+            print(f"\tERROR : Hymn [{source}] not found.")
             return False
 
-        [titleList, formattedLyricsList, source] = self.hymnMaker.getContent()
+        [titleList, formattedLyricsList, lookupSource] = self.hymnMaker.getContent()
 
         # Log if is sourced from the web
-        if source == "Web":
-            self.gEditor.writeLog(self.gEditor.LogType.Info, f"SlideMaker - Hymn web source lookup: [{source}]")
+        if lookupSource == "Web":
+            Logging.writeLog(Logging.LogType.Info, f"SlideMaker - Hymn web source lookup: [{source}]")
 
         # Title font size adjustments and decide if the lyrics text box needs to be shifted
         titleFontSize = int(self.config["HYMN_PROPERTIES"]["HymnTitleTextSize"])
         maxCharUnitLength = int(self.config["HYMN_PROPERTIES"]["HymnTitleMaxUnitLength"])
         minCharUnitLength = int(self.config["HYMN_PROPERTIES"]["HymnTitleMinUnitLength"])
-        titleLength = self._getVisualLength(titleList[0])
+        titleLength = Utility.getVisualLength(titleList[0])
         multiLineTitle = False
         if (titleLength > maxCharUnitLength):                                         # Heuristic : Shift the lyrics text block down for better aesthetics for multi-line titles
             multiLineTitle = True
@@ -260,14 +268,8 @@ class SlideMaker:
                 print(f"  MULTILINE FORMAT DEFAULT : {titleLength}, {maxCharUnitLength}, {minCharUnitLength}")
 
         # Generate create duplicate request and commit it
-        sourceSlideID = self.gEditor.getSlideID(slideIndex)
-        for i in range(len(titleList) - 1):  # Recall that the original source slide remains
-            self.gEditor.duplicateSlide(sourceSlideID, sourceSlideID + '_d' + str(i))
-        if (not self.gEditor.commitSlideChanges()):
+        if not self._duplicateSlide(len(titleList) - 1, slideIndex):
             return False
-
-        # Update offset
-        self.slideOffset += len(titleList) - 1
 
         # Insert title and lyrics data
         for i in range(slideIndex, slideIndex + len(titleList)):
@@ -281,9 +283,9 @@ class SlideMaker:
                             objectID=item[0],
                             text=titleList[i - slideIndex],
                             size=titleFontSize,
-                            bold=self.str2bool(self.config["HYMN_PROPERTIES"]["HymnTitleBolded"]),
-                            italic=self.str2bool(self.config["HYMN_PROPERTIES"]["HymnTitleItalicized"]),
-                            underlined=self.str2bool(self.config["HYMN_PROPERTIES"]["HymnTitleUnderlined"]),
+                            bold=self._str2bool(self.config["HYMN_PROPERTIES"]["HymnTitleBolded"]),
+                            italic=self._str2bool(self.config["HYMN_PROPERTIES"]["HymnTitleItalicized"]),
+                            underlined=self._str2bool(self.config["HYMN_PROPERTIES"]["HymnTitleUnderlined"]),
                             alignment=self.config["HYMN_PROPERTIES"]["HymnTitleAlignment"])
                     elif ('{Text}' in item[1]):
                         checkPoint[1] = True
@@ -291,19 +293,19 @@ class SlideMaker:
                             objectID=item[0],
                             text=formattedLyricsList[i - slideIndex],
                             size=int(self.config["HYMN_PROPERTIES"]["HymnTextSize"]),
-                            bold=self.str2bool(self.config["HYMN_PROPERTIES"]["HymnBolded"]),
-                            italic=self.str2bool(self.config["HYMN_PROPERTIES"]["HymnItalicized"]),
-                            underlined=self.str2bool(self.config["HYMN_PROPERTIES"]["HymnUnderlined"]),
+                            bold=self._str2bool(self.config["HYMN_PROPERTIES"]["HymnBolded"]),
+                            italic=self._str2bool(self.config["HYMN_PROPERTIES"]["HymnItalicized"]),
+                            underlined=self._str2bool(self.config["HYMN_PROPERTIES"]["HymnUnderlined"]),
                             alignment=self.config["HYMN_PROPERTIES"]["HymnAlignment"])
 
                         if (multiLineTitle):
                             self.gEditor.updatePageElementTransform(item[0], translateY=int(self.config["HYMN_PROPERTIES"]["HymnLoweredUnitHeight"]))
             except Exception:
-                print(f"\tERROR: {traceback.format_exc()}")
+                print(f"\tERROR : {traceback.format_exc()}")
                 return False
 
             if (False in checkPoint):
-                print(f"\tERROR: {checkPoint.count(True)} out of {len(checkPoint)} text placeholders found.")
+                print(f"\tERROR : {checkPoint.count(True)} out of {len(checkPoint)} text placeholders found.")
                 return False
 
         return self.gEditor.commitSlideChanges()
@@ -330,9 +332,9 @@ class SlideMaker:
                         objectID=item[0],
                         text=title,
                         size=int(self.config[propertyName][dataNameHeader + nextWeekString + "TitleTextSize"]),
-                        bold=self.str2bool(self.config[propertyName][dataNameHeader + "TitleBolded"]),
-                        italic=self.str2bool(self.config[propertyName][dataNameHeader + "TitleItalicized"]),
-                        underlined=self.str2bool(self.config[propertyName][dataNameHeader + "TitleUnderlined"]),
+                        bold=self._str2bool(self.config[propertyName][dataNameHeader + "TitleBolded"]),
+                        italic=self._str2bool(self.config[propertyName][dataNameHeader + "TitleItalicized"]),
+                        underlined=self._str2bool(self.config[propertyName][dataNameHeader + "TitleUnderlined"]),
                         alignment=self.config[propertyName][dataNameHeader + "TitleAlignment"])
                 elif '{Text}' in item[1]:
                     checkPoint[1] = True
@@ -340,9 +342,9 @@ class SlideMaker:
                         objectID=item[0],
                         text=verseString,
                         size=int(self.config[propertyName][dataNameHeader + "TextSize"]),
-                        bold=self.str2bool(self.config[propertyName][dataNameHeader + "Bolded"]),
-                        italic=self.str2bool(self.config[propertyName][dataNameHeader + "Italicized"]),
-                        underlined=self.str2bool(self.config[propertyName][dataNameHeader + "Underlined"]),
+                        bold=self._str2bool(self.config[propertyName][dataNameHeader + "Bolded"]),
+                        italic=self._str2bool(self.config[propertyName][dataNameHeader + "Italicized"]),
+                        underlined=self._str2bool(self.config[propertyName][dataNameHeader + "Underlined"]),
                         alignment=self.config[propertyName][dataNameHeader + "Alignment"])
 
                     # Superscript and bold the verse numbers, and set paragraph spacing between the verses
@@ -352,11 +354,11 @@ class SlideMaker:
                         if (ssRange[1] > 0 and ssRange[0] == self.verseMaker.SSType.VerseNumber):  # No need for paragraph spacing in initial line
                             self.gEditor.setSpaceAbove(item[0], ssRange[1], 10)
         except Exception:
-            print(f"\tERROR: {traceback.format_exc()}")
+            print(f"\tERROR : {traceback.format_exc()}")
             return False
 
         if (False in checkPoint):
-            print(f"\tERROR: {checkPoint.count(True)} out of {len(checkPoint)} text placeholders found.")
+            print(f"\tERROR : {checkPoint.count(True)} out of {len(checkPoint)} text placeholders found.")
             return False
 
         return self.gEditor.commitSlideChanges()
@@ -364,22 +366,15 @@ class SlideMaker:
     def _scriptureMultiSlide(self, source: str, maxLineLength: int, maxLinesPerSlide: int, propertyName: str, dataNameHeader: str) -> bool:
         # Assumes monthly scripture is short enough to fit in one slide
         if (not self.verseMaker.setSource(source, maxLineLength)):
-            print(f"\tERROR: Verse {source} not found.")
+            print(f"\tERROR : Verse {source} not found.")
             return False
 
         [title, slideVersesList, slideSSIndexList] = self.verseMaker.getVerseStringMultiSlide(maxLinesPerSlide)
 
         # Generate create duplicate request and commit it
         slideIndex = int(self.config[propertyName][dataNameHeader + "Index"]) + self.slideOffset
-        sourceSlideID = self.gEditor.getSlideID(slideIndex)
-        for i in range(len(slideVersesList) - 1):  # Recall that the original source slide remains
-            self.gEditor.duplicateSlide(
-                sourceSlideID, sourceSlideID + '_' + str(i))
-        if (not self.gEditor.commitSlideChanges()):
+        if not self._duplicateSlide(len(slideVersesList) - 1, slideIndex):
             return False
-
-        # Update offset
-        self.slideOffset += len(slideVersesList) - 1
 
         # Get units of paragraph that separates verse numbers
         paragraphSpace = int(self.config["VERSE_PROPERTIES"]["VerseParagraphSpace"])
@@ -396,9 +391,9 @@ class SlideMaker:
                             objectID=item[0],
                             text=title,
                             size=int(self.config[propertyName][dataNameHeader + "TitleTextSize"]),
-                            bold=self.str2bool(self.config[propertyName][dataNameHeader + "TitleBolded"]),
-                            italic=self.str2bool(self.config[propertyName][dataNameHeader + "TitleItalicized"]),
-                            underlined=self.str2bool(self.config[propertyName][dataNameHeader + "TitleUnderlined"]),
+                            bold=self._str2bool(self.config[propertyName][dataNameHeader + "TitleBolded"]),
+                            italic=self._str2bool(self.config[propertyName][dataNameHeader + "TitleItalicized"]),
+                            underlined=self._str2bool(self.config[propertyName][dataNameHeader + "TitleUnderlined"]),
                             alignment=self.config[propertyName][dataNameHeader + "TitleAlignment"])
                     elif '{Text}' in item[1]:
                         checkPoint[1] = True
@@ -406,9 +401,9 @@ class SlideMaker:
                             objectID=item[0],
                             text=slideVersesList[i - slideIndex],
                             size=int(self.config[propertyName][dataNameHeader + "TextSize"]),
-                            bold=self.str2bool(self.config[propertyName][dataNameHeader + "Bolded"]),
-                            italic=self.str2bool(self.config[propertyName][dataNameHeader + "Italicized"]),
-                            underlined=self.str2bool(self.config[propertyName][dataNameHeader + "Underlined"]),
+                            bold=self._str2bool(self.config[propertyName][dataNameHeader + "Bolded"]),
+                            italic=self._str2bool(self.config[propertyName][dataNameHeader + "Italicized"]),
+                            underlined=self._str2bool(self.config[propertyName][dataNameHeader + "Underlined"]),
                             alignment=self.config[propertyName][dataNameHeader + "Alignment"])
 
                         # Superscript and bold the verse numbers, and set paragraph spacing between the verses
@@ -418,11 +413,11 @@ class SlideMaker:
                             if (ssRange[1] > 0 and ssRange[0] == self.verseMaker.SSType.VerseNumber):  # No need for paragraph spacing in initial line
                                 self.gEditor.setSpaceAbove(item[0], ssRange[1], paragraphSpace)
             except Exception:
-                print(f"\tERROR: {traceback.format_exc()}")
+                print(f"\tERROR : {traceback.format_exc()}")
                 return False
 
             if (False in checkPoint):
-                print(f"\tERROR: {checkPoint.count(True)} out of {len(checkPoint)} text placeholders found.")
+                print(f"\tERROR : {checkPoint.count(True)} out of {len(checkPoint)} text placeholders found.")
                 return False
 
         return self.gEditor.commitSlideChanges()
@@ -438,9 +433,9 @@ class SlideMaker:
                         objectID=item[0],
                         text=title.upper(),
                         size=int(self.config[propertyName][dataNameHeader + "TitleTextSize"]),
-                        bold=self.str2bool(self.config[propertyName][dataNameHeader + "TitleBolded"]),
-                        italic=self.str2bool(self.config[propertyName][dataNameHeader + "TitleItalicized"]),
-                        underlined=self.str2bool(self.config[propertyName][dataNameHeader + "TitleUnderlined"]),
+                        bold=self._str2bool(self.config[propertyName][dataNameHeader + "TitleBolded"]),
+                        italic=self._str2bool(self.config[propertyName][dataNameHeader + "TitleItalicized"]),
+                        underlined=self._str2bool(self.config[propertyName][dataNameHeader + "TitleUnderlined"]),
                         alignment=self.config[propertyName][dataNameHeader + "TitleAlignment"])
                 elif '{Text}' in item[1]:
                     checkPoint[1] = True
@@ -448,12 +443,12 @@ class SlideMaker:
                         objectID=item[0],
                         text=speaker.title(),
                         size=int(self.config[propertyName][dataNameHeader + "SpeakerTextSize"]),
-                        bold=self.str2bool(self.config[propertyName][dataNameHeader + "SpeakerBolded"]),
-                        italic=self.str2bool(self.config[propertyName][dataNameHeader + "SpeakerItalicized"]),
-                        underlined=self.str2bool(self.config[propertyName][dataNameHeader + "SpeakerUnderlined"]),
+                        bold=self._str2bool(self.config[propertyName][dataNameHeader + "SpeakerBolded"]),
+                        italic=self._str2bool(self.config[propertyName][dataNameHeader + "SpeakerItalicized"]),
+                        underlined=self._str2bool(self.config[propertyName][dataNameHeader + "SpeakerUnderlined"]),
                         alignment=self.config[propertyName][dataNameHeader + "SpeakerAlignment"])
         except Exception:
-            print(f"\tERROR: {traceback.format_exc()}")
+            print(f"\tERROR : {traceback.format_exc()}")
             return False
 
         if (False in checkPoint):
@@ -474,17 +469,118 @@ class SlideMaker:
                         objectID=item[0],
                         text=title.upper(),
                         size=int(self.config[propertyName][dataNameHeader + nextWeekString + "TitleTextSize"]),
-                        bold=self.str2bool(self.config[propertyName][dataNameHeader + "TitleBolded"]),
-                        italic=self.str2bool(self.config[propertyName][dataNameHeader + "TitleItalicized"]),
-                        underlined=self.str2bool(self.config[propertyName][dataNameHeader + "TitleUnderlined"]),
+                        bold=self._str2bool(self.config[propertyName][dataNameHeader + "TitleBolded"]),
+                        italic=self._str2bool(self.config[propertyName][dataNameHeader + "TitleItalicized"]),
+                        underlined=self._str2bool(self.config[propertyName][dataNameHeader + "TitleUnderlined"]),
                         alignment=self.config[propertyName][dataNameHeader + "TitleAlignment"])
         except Exception:
-            print(f"\tERROR: {traceback.format_exc()}")
+            print(f"\tERROR : {traceback.format_exc()}")
             return False
 
         if (False in checkPoint):
             print(f"\tERROR : {checkPoint.count(True)} out of {len(checkPoint)} text placeholders found.")
             return False
+
+        return self.gEditor.commitSlideChanges()
+
+    def _textMultiSlide(self, title: str, textContentList: List[str], propertyName: str, dataNameHeader: str) -> bool:
+        # For announcement slides
+        slideIndex = int(self.config[propertyName][dataNameHeader + "Index"]) + self.slideOffset
+
+        # Generate create duplicate request and commit it
+        if not self._duplicateSlide(len(textContentList) - 1, slideIndex):
+            return False
+
+        # Insert title and verses data
+        for i in range(slideIndex, slideIndex + len(textContentList)):
+            checkPoint = [False, False]
+            try:
+                data = self.gEditor.getSlideTextData(i)
+                for item in data:
+                    if '{Title}' in item[1]:
+                        checkPoint[0] = True
+                        self._insertText(
+                            objectID=item[0],
+                            text=title.upper(),
+                            size=int(self.config[propertyName][dataNameHeader + "TitleTextSize"]),
+                            bold=self._str2bool(self.config[propertyName][dataNameHeader + "TitleBolded"]),
+                            italic=self._str2bool(self.config[propertyName][dataNameHeader + "TitleItalicized"]),
+                            underlined=self._str2bool(self.config[propertyName][dataNameHeader + "TitleUnderlined"]),
+                            alignment=self.config[propertyName][dataNameHeader + "TitleAlignment"])
+                    elif '{Text}' in item[1]:
+                        checkPoint[1] = True
+                        self._insertText(
+                            objectID=item[0],
+                            text=textContentList[i - slideIndex],
+                            size=int(self.config[propertyName][dataNameHeader + "TextSize"]),
+                            bold=self._str2bool(self.config[propertyName][dataNameHeader + "Bolded"]),
+                            italic=self._str2bool(self.config[propertyName][dataNameHeader + "Italicized"]),
+                            underlined=self._str2bool(self.config[propertyName][dataNameHeader + "Underlined"]),
+                            alignment=self.config[propertyName][dataNameHeader + "Alignment"])
+            except Exception:
+                print(f"\tERROR : {traceback.format_exc()}")
+                return False
+
+            if (False in checkPoint):
+                print(f"\tERROR : {checkPoint.count(True)} out of {len(checkPoint)} text placeholders found.")
+                return False
+
+        return self.gEditor.commitSlideChanges()
+
+    def _numListMultiSlide(self, title: str, contentList: List[str], propertyName: str, dataNameHeader: str) -> bool:
+        # For supplication slides
+        slideIndex = int(self.config[propertyName][dataNameHeader + "Index"]) + self.slideOffset
+        paragraphSpace = int(self.config[propertyName][dataNameHeader + "ParagraphSpace"])
+
+        # Get slide separated list
+        [slideContentList, listStartIndex] = ListMaker.getFormattedListElementsBySlide(contentList,
+                                                                                       indentSpace=int(self.config[propertyName][dataNameHeader + "IndentSpace"]),
+                                                                                       maxLineLength=int(self.config[propertyName][dataNameHeader + "TextMaxLineLength"]),
+                                                                                       maxLinesPerSlide=int(self.config[propertyName][dataNameHeader + "TextMaxLines"]))
+
+        # Generate create duplicate request and commit it
+        if not self._duplicateSlide(len(slideContentList) - 1, slideIndex):
+            return False
+
+        # Insert title and verses data
+        for i in range(slideIndex, slideIndex + len(slideContentList)):
+            checkPoint = [False, False]
+            try:
+                data = self.gEditor.getSlideTextData(i)
+                for item in data:
+                    if '{Title}' in item[1]:
+                        checkPoint[0] = True
+                        self._insertText(
+                            objectID=item[0],
+                            text=title.upper(),
+                            size=int(self.config[propertyName][dataNameHeader + "TitleTextSize"]),
+                            bold=self._str2bool(self.config[propertyName][dataNameHeader + "TitleBolded"]),
+                            italic=self._str2bool(self.config[propertyName][dataNameHeader + "TitleItalicized"]),
+                            underlined=self._str2bool(self.config[propertyName][dataNameHeader + "TitleUnderlined"]),
+                            alignment=self.config[propertyName][dataNameHeader + "TitleAlignment"])
+                    elif '{Text}' in item[1]:
+                        checkPoint[1] = True
+                        self._insertText(
+                            objectID=item[0],
+                            text=slideContentList[i - slideIndex],
+                            size=int(self.config[propertyName][dataNameHeader + "TextSize"]),
+                            bold=self._str2bool(self.config[propertyName][dataNameHeader + "Bolded"]),
+                            italic=self._str2bool(self.config[propertyName][dataNameHeader + "Italicized"]),
+                            underlined=self._str2bool(self.config[propertyName][dataNameHeader + "Underlined"]),
+                            alignment=self.config[propertyName][dataNameHeader + "Alignment"])
+
+                        # Add bullets
+                        for lineStartIndex in listStartIndex[i - slideIndex]:
+                            if lineStartIndex > 0:  # No need for paragraph spacing in initial line
+                                self.gEditor.setSpaceAbove(item[0], lineStartIndex, paragraphSpace)
+
+            except Exception:
+                print(f"\tERROR : {traceback.format_exc()}")
+                return False
+
+            if (False in checkPoint):
+                print(f"\tERROR : {checkPoint.count(True)} out of {len(checkPoint)} text placeholders found.")
+                return False
 
         return self.gEditor.commitSlideChanges()
 
@@ -504,7 +600,7 @@ class SlideMaker:
         # Disabled status
         return False
 
-    def str2bool(self, boolString: str) -> bool:
+    def _str2bool(self, boolString: str) -> bool:
         return boolString.lower() in ("yes", "true", "t", "1")
 
     def _openSlideInBrowser(self) -> None:
@@ -515,40 +611,48 @@ class SlideMaker:
         self.gEditor.setTextStyle(objectID, bold, italic, underlined, size)
         self.gEditor.setParagraphStyle(objectID, self.lineSpacing if linespacing < 0 else linespacing, alignment)
 
-    def _getVisualLength(self, text: str) -> int:
-        # A precise measurement to indicate if text will align or will take up multiple lines
-        text = ''.join([i if ord(i) < 128 else ' ' for i in text])  # Replace all non-ascii characters
-        return int(self.afm.string_width_height(text)[0])
+    def _duplicateSlide(self, dupCount: int, slideIndex: int) -> bool:
+        # Generate extra duplicate slides (total number of slides = [dupCount + 1]) and commit it
+        sourceSlideID = self.gEditor.getSlideID(slideIndex)
+        for i in range(dupCount):  # Recall that the original source slide remains
+            self.gEditor.duplicateSlide(
+                sourceSlideID, sourceSlideID + '__' + str(i))
+        if (not self.gEditor.commitSlideChanges()):
+            return False
+
+        # Update offset
+        self.slideOffset += dupCount
+
+        return True
 
 
 if __name__ == '__main__':
     print("====================================================================")
-    print(f"\t\t\tSlideMaker v{VersionNumber}")
+    print(f"\t\t\tSlideMaker v{Logging.VersionNumber}")
     print("====================================================================")
     print("\nInput Options:\n  Stream Slides: \ts\n  Projected Slides: \tp\n  Regular Slides: \tr\n  Quit: \t\tq\n")
     print("====================================================================\n")
 
     mode = ""
     while (mode != "q"):
-        pptType = PPTMode.Null
+        pptType = SlideMaker.PPTMode.Null
         mode = input("Input: ")
         if (len(mode) > 0):
             if (mode == "s"):
-                pptType = PPTMode.Stream
+                pptType = SlideMaker.PPTMode.Stream
             elif (mode == "p"):
-                pptType = PPTMode.Projected
+                pptType = SlideMaker.PPTMode.Projected
             elif (mode == "r"):
-                pptType = PPTMode.Regular
+                pptType = SlideMaker.PPTMode.Regular
             elif (mode == "-t"):
-                sm = SlideMaker()
                 inputStr = r' '.join(sys.argv[2:])
-                print(f"String Visual Length of '{inputStr}' = {sm._getVisualLength(inputStr)} Units")
+                print(f"String Visual Length of '{inputStr}' = {Utility.getVisualLength(inputStr)} Units")
 
-        if (pptType != PPTMode.Null):
+        if (pptType != SlideMaker.PPTMode.Null):
             start = time.time()
 
             print("\nINITIALIZING...")
-            sm = SlideMaker()
+            sm: SlideMaker = SlideMaker()
 
             sm.setType(pptType)
 
@@ -562,6 +666,7 @@ if __name__ == '__main__':
             print("  catechismSlide() : ", sm.catechismSlide())
             print("  bibleVerseMemorizationNextWeekSlide() : ", sm.bibleVerseMemorizationSlide(True))
             print("  catechismNextWeekSlide() : ", sm.catechismSlide(True))
+            print("  supplicationSlide() : ", sm.supplicationSlide())
             print("  worshipSlide() : ", sm.worshipSlide())
             print("  callToWorshipSlide() : ", sm.callToWorshipSlide())
             print("  hymnSlides(1) : ", sm.hymnSlides(1))

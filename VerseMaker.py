@@ -4,10 +4,11 @@ import sys
 import math
 
 from enum import Enum
+from typing import Any, List
 
-import matplotlib
+from ListMaker import ListMaker
 from LookupTools import LookupTools
-from matplotlib.afm import AFM
+from Utility import Utility
 
 '''
 
@@ -32,7 +33,7 @@ class VerseMaker:
         Space = 0
         VerseNumber = 1
 
-    def __init__(self, type):
+    def __init__(self, type: str) -> None:
         self.verseSource = ""
         self.verses = ""
 
@@ -45,11 +46,7 @@ class VerseMaker:
         self.maxLineLength = 0
         self.indentSpace = int(config["VERSE_PROPERTIES"]["VerseIndentSpace"])
 
-        # For finding visual lengths of text strings
-        afm_filename = os.path.join(matplotlib.get_data_path(), 'fonts', 'afm', 'ptmr8a.afm')
-        self.afm = AFM(open(afm_filename, "rb"))
-
-    def setSource(self, verseSource, maxLineLength):
+    def setSource(self, verseSource: str, maxLineLength: int) -> bool:
         # Returns true if source is valid, false otherwise
         if (verseSource == ""):
             return False
@@ -60,7 +57,7 @@ class VerseMaker:
 
         return self.verses != "Not Found"
 
-    def getContent(self):
+    def getContent(self) -> Any:
         title = self.verseSource
         verseList = []
         ssIndexList = []
@@ -76,7 +73,7 @@ class VerseMaker:
     # ======================================= CUSTOM GETTERS =======================================
     # ==============================================================================================
 
-    def getVerseString(self):
+    def getVerseString(self) -> Any:
         # No title, but appended with a '--[Verse Source]' on a new line
         [title, verseList, ssIndexList] = self.getContent()
 
@@ -94,7 +91,7 @@ class VerseMaker:
 
         return [verseString, ssIndexList]
 
-    def getVerseStringMultiSlide(self, maxLinesPerSlide):
+    def getVerseStringMultiSlide(self, maxLinesPerSlide: int) -> Any:
         # Splits verse into multiple components, each per slide
         [title, verseList, ssIndexList] = self.getContent()
 
@@ -146,57 +143,12 @@ class VerseMaker:
     # ========================================= FORMATTER ==========================================
     # ==============================================================================================
 
-    def _getFormattedVerses(self, verses):
+    def _getFormattedVerses(self, verses: str) -> List[List[str]]:
         [verseList, numberList] = self._getVerseComponents(verses)
 
-        # A list of list of verse lines
-        formatedVerses = []
+        return ListMaker.setLineLengthRestriction(verseList, numberList, self.indentSpace, self.maxLineLength)
 
-        # Find max character of verse number
-        maxDigits = 0
-        for num in numberList:
-            if len(num) > maxDigits:
-                maxDigits = len(num)
-
-        # Create indent spacing
-        indent = "".join(" " for _ in range(self.indentSpace))
-
-        for i in range(len(verseList)):
-            # Split verse into separate lines that are within the character limit
-            verseLines = []
-            leftIndex = 0
-            rightIndex = self._getRightMostMaxIndex(verseList[i])
-
-            # Iteratively cut string into lengths less than maximum
-            while (rightIndex < len(verseList[i])):
-                # Find " " character left of the maxLineLength Index
-                while (verseList[i][rightIndex] != " " and rightIndex >= 0):
-                    rightIndex -= 1
-
-                # Generate custom indent for line with verse numbers
-                if (leftIndex < 1):
-                    customIndentSpaces = self.indentSpace - len(numberList[i])
-                    customIndent = "".join(" " for _ in range(customIndentSpaces if customIndentSpaces > 0 else 0))
-                    verseLines.append(numberList[i] + customIndent + verseList[i][leftIndex:rightIndex] + "\n")
-                else:
-                    verseLines.append(indent + verseList[i][leftIndex:rightIndex] + "\n")
-
-                leftIndex = rightIndex
-                rightIndex += self._getRightMostMaxIndex(verseList[i][leftIndex:]) + 1
-
-            # Append the remaining verses and add to list of formatted verses
-            if (leftIndex < 1):
-                customIndentSpaces = self.indentSpace - len(numberList[i])
-                customIndent = "".join(" " for _ in range(customIndentSpaces if customIndentSpaces > 0 else 0))
-                verseLines.append(numberList[i] + customIndent + verseList[i][leftIndex:rightIndex] + "\n")
-            else:
-                verseLines.append(indent + verseList[i][leftIndex:] + "\n")
-
-            formatedVerses.append(verseLines)
-
-        return formatedVerses
-
-    def _getSuperScriptIndexes(self, verseList):
+    def _getSuperScriptIndexes(self, verseList: List[List[str]]) -> List[List[object]]:
         index = 0
         ssIndexList = []
 
@@ -225,18 +177,18 @@ class VerseMaker:
     # =========================================== TOOLS ============================================
     # ==============================================================================================
 
-    def _getRightMostMaxIndex(self, verse):
+    def _getRightMostMaxIndex(self, verse: str) -> int:
         # Based on the max line unit length, find the rightmost character that is within the length
         leftIndex = 0
         rightIndex = len(verse)
 
-        if (self._getVisualLength(verse) <= self.maxLineLength):
+        if (Utility.getVisualLength(verse) <= self.maxLineLength):
             return rightIndex
 
         # Iteratively narrow down the index position
         while(leftIndex + 1 < rightIndex):
             middleIndex = int((leftIndex + rightIndex) / 2)
-            currUnitLineLength = self._getVisualLength(verse[:middleIndex])
+            currUnitLineLength = Utility.getVisualLength(verse[:middleIndex])
             if (currUnitLineLength > self.maxLineLength):
                 rightIndex = middleIndex
             else:
@@ -244,12 +196,7 @@ class VerseMaker:
 
         return leftIndex
 
-    def _getVisualLength(self, text):
-        # A precise measurement to indicate if text will align or will take up multiple lines
-        text = ''.join([i if ord(i) < 128 else ' ' for i in text])  # Replace all non-ascii characters
-        return int(self.afm.string_width_height(text)[0])
-
-    def _getVerseComponents(self, verses):
+    def _getVerseComponents(self, verses: str) -> List[List[str]]:
         # Split multiple verses into individuals
         verseNumberList = []
         verseList = []
@@ -276,7 +223,7 @@ class VerseMaker:
 
         return [verseList, verseNumberList]
 
-    def _getSSAlignmentSpace(self, ssCharLength):
+    def _getSSAlignmentSpace(self, ssCharLength: int) -> int:
         # Number of converted spaces need to align line with verse number and lines without;
         # assumes bible verse number does not exceed 3 digits
         if (ssCharLength == 3 or ssCharLength == 2):
@@ -308,7 +255,7 @@ if __name__ == '__main__':
     if (type != ""):
         vm = VerseMaker(type)
         config = configparser.ConfigParser()
-        config.read(type + "SlideProperties.ini")
+        config.read("Data\\" + type + "SlideProperties.ini")
 
         if (vm.setSource(' '.join(sys.argv[2:]), int(config["SERMON_VERSE_PROPERTIES"]["SermonVerseMaxLineLength"]))):
             # GetContent() Test
