@@ -41,8 +41,8 @@ class Logging:
         # The file token.pickle stores the user's access and refresh tokens, and is
         # created automatically when the authorization flow completes for the first
         # time.
-        if os.path.exists('token.pickle'):
-            creds = Credentials.from_authorized_user_file('token.pickle', ['https://www.googleapis.com/auth/spreadsheets'])
+        if os.path.exists('Data/token.pickle'):
+            creds = Credentials.from_authorized_user_file('Data/token.pickle', ['https://www.googleapis.com/auth/spreadsheets'])
         # If there are no (valid) credentials available, let the user log in.
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
@@ -52,7 +52,7 @@ class Logging:
                     'Data/credentials.json', ['https://www.googleapis.com/auth/spreadsheets'])
                 creds = flow.run_local_server(port=0)
             # Save the credentials for the next run
-            with open('token.pickle', 'w') as token:
+            with open('Data/token.pickle', 'w') as token:
                 token.write(creds.to_json())
 
         Logging.sheetService = build('sheets', 'v4', credentials=creds)

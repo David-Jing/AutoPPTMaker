@@ -126,3 +126,6 @@ dmypy.json
 
 # Google
 *.pickle
+
+# SlideMaker
+Data/SlideIDList.txt

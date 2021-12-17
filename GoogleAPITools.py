@@ -80,8 +80,8 @@ class GoogleAPITools:
         # The file token.pickle stores the user's access and refresh tokens, and is
         # created automatically when the authorization flow completes for the first
         # time.
-        if os.path.exists('token.pickle'):
-            creds = Credentials.from_authorized_user_file('token.pickle', self.scope)
+        if os.path.exists('Data/token.pickle'):
+            creds = Credentials.from_authorized_user_file('Data/token.pickle', self.scope)
         # If there are no (valid) credentials available, let the user log in.
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
@@ -91,7 +91,7 @@ class GoogleAPITools:
                     'Data/credentials.json', self.scope)
                 creds = flow.run_local_server(port=0)
             # Save the credentials for the next run
-            with open('token.pickle', 'w') as token:
+            with open('Data/token.pickle', 'w') as token:
                 token.write(creds.to_json())
 
         slideService = build('slides', 'v1', credentials=creds)
