@@ -157,6 +157,11 @@ class GoogleAPITools:
         # Delete the slide with the "slideObjectID"
         self.requests.append({"deleteObject": {"objectId": slideObjectID}})
 
+    def moveSlideSet(self, slideObjectIDList: list[str], newLocationIndex: int) -> None:
+        # Move set of slides to new location while maintaining relative ordering
+        self.requests.append({"UpdateSlidesPositionRequest ": {"slideObjectIds": slideObjectIDList,
+                                                               "insertionIndex": newLocationIndex}})
+
     # ==========================================================================================
     # ================================= SLIDE FORMAT SETTERS ===================================
     # ==========================================================================================

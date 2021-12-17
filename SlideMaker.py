@@ -29,6 +29,11 @@ class SlideMaker:
         Projected = 1
         Regular = 2
 
+    class ModuleStatus(Enum):
+        Done = 0
+        Failed = 1
+        Disabled = 2
+
     def __init__(self) -> None:
         # Offset for when creating new slides
         self.slideOffset = 0
@@ -63,106 +68,112 @@ class SlideMaker:
     # ========================================== SLIDE MAKERS ==============================================
     # ======================================================================================================
 
-    def sundayServiceSlide(self) -> bool:
+    def sundayServiceSlide(self) -> ModuleStatus:
         title = self.input["SUNDAY_SERVICE_HEADER"]["SundayServiceHeaderTitle"].upper()
 
-        return self._titleSlide(title, "SUNDAY_SERVICE_HEADER_PROPERTIES", "SundayServiceHeader")
+        result = self._titleSlide(title, "SUNDAY_SERVICE_HEADER_PROPERTIES", "SundayServiceHeader")
+        return self.ModuleStatus.Done if result else self.ModuleStatus.Failed
 
-    def monthlyScriptureSlide(self) -> bool:
+    def monthlyScriptureSlide(self) -> ModuleStatus:
         title = self.input["MONTHLY_SCRIPTURE"]["MonthlyScriptureTitle"].upper()
         source = self.input["MONTHLY_SCRIPTURE"]["MonthlyScriptureSource"].upper()
         maxLineLength = int(self.config["MONTHLY_SCRIPTURE_PROPERTIES"]["MonthlyScriptureMaxLineLength"])
 
-        return self._scriptureSingleSlide(title, source, maxLineLength,
-                                          "MONTHLY_SCRIPTURE_PROPERTIES", "MonthlyScripture")
+        result = self._scriptureSingleSlide(title, source, maxLineLength,
+                                            "MONTHLY_SCRIPTURE_PROPERTIES", "MonthlyScripture")
+        return self.ModuleStatus.Done if result else self.ModuleStatus.Failed
 
-    def announcementSlide(self) -> bool:
+    def announcementSlide(self) -> ModuleStatus:
         title = self.input["ANNOUNCEMENTS"]["AnnouncementsTitle"].upper()
         announcementList = self.gEditor.getAnnouncements()
 
-        return self._textMultiSlide(title, announcementList, "ANNOUNCEMENTS_PROPERTIES", "Announcements")
+        result = self._textMultiSlide(title, announcementList, "ANNOUNCEMENTS_PROPERTIES", "Announcements")
+        return self.ModuleStatus.Done if result else self.ModuleStatus.Failed
 
-    def bibleVerseMemorizationSlide(self, nextWeek: bool = False) -> bool:
+    def bibleVerseMemorizationSlide(self, nextWeek: bool = False) -> ModuleStatus:
         lastWeekString = "LastWeek" if not nextWeek else ""
         title = self.input["BIBLE_MEMORIZATION"]["BibleMemorization" + lastWeekString + "Title"].upper()
         source = self.input["BIBLE_MEMORIZATION"]["BibleMemorization" + lastWeekString + "Source"].upper()
         maxLineLength = int(self.config["BIBLE_MEMORIZATION_PROPERTIES"]["BibleMemorizationMaxLineLength"])
 
-        return self._scriptureSingleSlide(title, source, maxLineLength,
-                                          "BIBLE_MEMORIZATION_PROPERTIES", "BibleMemorization", nextWeek)
+        result = self._scriptureSingleSlide(title, source, maxLineLength,
+                                            "BIBLE_MEMORIZATION_PROPERTIES", "BibleMemorization", nextWeek)
+        return self.ModuleStatus.Done if result else self.ModuleStatus.Failed
 
-    def catechismSlide(self, nextWeek: bool = False) -> bool:
+    def catechismSlide(self, nextWeek: bool = False) -> ModuleStatus:
         title = self.input["CATECHISM"]["Catechism" + ("LastWeek" if not nextWeek else "") + "Title"].upper()
-        return self._headerOnlySlide(title, "CATECHISM_PROPERTIES", "Catechism", nextWeek)
 
-    def supplicationSlide(self) -> bool:
+        result = self._headerOnlySlide(title, "CATECHISM_PROPERTIES", "Catechism", nextWeek)
+        return self.ModuleStatus.Done if result else self.ModuleStatus.Failed
+
+    def supplicationSlide(self) -> ModuleStatus:
         enabled = self.input["SUPPLICATIONS"]["SupplicationsEnabled"].upper()
         title = self.input["SUPPLICATIONS"]["SupplicationsTitle"].upper()
         supplicationList = self.gEditor.getSupplications()
 
         if (enabled == "TRUE"):
-            return self._numListMultiSlide(title, supplicationList, "SUPPLICATIONS_PROPERTIES", "Supplications")
+            result = self._numListMultiSlide(title, supplicationList, "SUPPLICATIONS_PROPERTIES", "Supplications")
+            return self.ModuleStatus.Done if result else self.ModuleStatus.Failed
         else:
             slideIndex = int(self.config["SUPPLICATIONS_PROPERTIES"]["SupplicationsIndex"]) + self.slideOffset
-            return self._deleteSlide(slideIndex)
+            result = self._deleteSlide([slideIndex])
+            return self.ModuleStatus.Disabled if result else self.ModuleStatus.Failed
 
-    def worshipSlide(self) -> bool:
+    def worshipSlide(self) -> ModuleStatus:
         title = self.input["WORSHIP_HEADER"]["WorshipHeaderTitle"].upper()
 
-        return self._titleSlide(title, "WORSHIP_HEADER_PROPERTIES", "WorshipHeader")
+        result = self._titleSlide(title, "WORSHIP_HEADER_PROPERTIES", "WorshipHeader")
+        return self.ModuleStatus.Done if result else self.ModuleStatus.Failed
 
-    def callToWorshipSlide(self) -> bool:
+    def callToWorshipSlide(self) -> ModuleStatus:
         source = self.input["CALL_TO_WORSHIP"]["CallToWorshipSource"].upper()
         maxLineLength = int(self.config["CALL_TO_WORSHIP_PROPERTIES"]["CallToWorshipMaxLineLength"])
         maxLinesPerSlide = int(self.config["CALL_TO_WORSHIP_PROPERTIES"]["CallToWorshipMaxLines"])
 
         # Delete section if source is empty
         if (source == ""):
-            return self._deleteSlide(int(self.config["CALL_TO_WORSHIP_PROPERTIES"]["CallToWorshipIndex"]) + self.slideOffset)
+            result = self._deleteSlide([int(self.config["CALL_TO_WORSHIP_PROPERTIES"]["CallToWorshipIndex"]) + self.slideOffset])
+            return self.ModuleStatus.Disabled if result else self.ModuleStatus.Failed
 
-        return self._scriptureMultiSlide(source, maxLineLength, maxLinesPerSlide,
-                                         "CALL_TO_WORSHIP_PROPERTIES", "CallToWorship")
+        result = self._scriptureMultiSlide(source, maxLineLength, maxLinesPerSlide,
+                                           "CALL_TO_WORSHIP_PROPERTIES", "CallToWorship")
+        return self.ModuleStatus.Done if result else self.ModuleStatus.Failed
 
-    def prayerOfConfessionSlide(self) -> bool:
+    def prayerOfConfessionSlide(self) -> ModuleStatus:
         title = self.input["PRAYER_OF_CONFESSION"]["PrayerOfConfessionTitle"].upper()
         source = self.input["PRAYER_OF_CONFESSION"]["PrayerOfConfessionSource"].upper()
+        enabled = self.input["PRAYER_OF_CONFESSION"]["PrayerOfConfessionEnabled"].upper()
         maxLineLength = int(self.config["PRAYER_OF_CONFESSION_PROPERTIES"]["PrayerOfConfessionMaxLineLength"])
 
         # Delete section if source is empty
-        if (source == ""):
-            return self._deleteSlide(int(self.config["PRAYER_OF_CONFESSION_PROPERTIES"]["PrayerOfConfessionIndex"]) + self.slideOffset)
+        if (enabled != "TRUE" or source == ""):
+            result = self._deleteSlide([int(self.config["PRAYER_OF_CONFESSION_PROPERTIES"]["PrayerOfConfessionIndex"]) + self.slideOffset])
+            return self.ModuleStatus.Disabled if result else self.ModuleStatus.Failed
 
-        return self._scriptureSingleSlide(title, source, maxLineLength,
-                                          "PRAYER_OF_CONFESSION_PROPERTIES", "PrayerOfConfession")
+        result = self._scriptureSingleSlide(title, source, maxLineLength,
+                                            "PRAYER_OF_CONFESSION_PROPERTIES", "PrayerOfConfession")
+        return self.ModuleStatus.Done if result else self.ModuleStatus.Failed
 
-    def holyCommunionSlide(self) -> bool:
+    def holyCommunionSlide(self) -> ModuleStatus:
         enabled = self.input["HOLY_COMMUNION"]["HolyCommunionSlidesEnabled"].upper()
         slideIndex = int(self.config["HOLY_COMMUNION_PROPERTIES"]["HolyCommunionIndex"]) + self.slideOffset
         numOfSlides = int(self.config["HOLY_COMMUNION_PROPERTIES"]["HolyCommunionSlides"])
 
         # If not enabled, delete section
         if (enabled != "TRUE"):
-            for i in range(slideIndex, slideIndex + numOfSlides):
-                sourceSlideID = self.gEditor.getSlideID(i)
-                self.gEditor.deleteSlide(sourceSlideID)
+            result = self._deleteSlide([i for i in range(slideIndex, slideIndex + numOfSlides)])
+            return self.ModuleStatus.Disabled if result else self.ModuleStatus.Failed
 
-            if (not self.gEditor.commitSlideChanges()):
-                return False
+        return self.ModuleStatus.Done
 
-            self.slideOffset -= numOfSlides
-
-            # Disabled status
-            return False
-
-        return True
-
-    def sermonHeaderSlide(self) -> bool:
+    def sermonHeaderSlide(self) -> ModuleStatus:
         title = self.input["SERMON_HEADER"]["SermonHeaderTitle"].upper()
         speaker = self.input["SERMON_HEADER"]["SermonHeaderSpeaker"]
 
-        return self._sermonHeaderSlide(title, speaker, "SERMON_HEADER_PROPERTIES", "SermonHeader")
+        result = self._sermonHeaderSlide(title, speaker, "SERMON_HEADER_PROPERTIES", "SermonHeader")
+        return self.ModuleStatus.Done if result else self.ModuleStatus.Failed
 
-    def sermonVerseSlide(self) -> bool:
+    def sermonVerseSlide(self) -> ModuleStatus:
         # Allow for multiple unique sources separated by ","
         sources = self.input["SERMON_VERSE"]["SermonVerseSource"].upper()
         sourceList = sources.split(",")
@@ -172,28 +183,31 @@ class SlideMaker:
         # Generate templates for each verse source
         slideIndex = int(self.config["SERMON_VERSE_PROPERTIES"]["SermonVerseIndex"]) + self.slideOffset
         if not self._duplicateSlide(len(sourceList) - 1, slideIndex):
-            return False
+            return self.ModuleStatus.Failed
 
-        # Iterate and generate the slides
-        output = True
+        # Iterate and generate the slides by each unique source
+        result = True
         for source in sourceList:
             if (not self._scriptureMultiSlide(source.strip(), maxLineLength, maxLinesPerSlide, "SERMON_VERSE_PROPERTIES", "SermonVerse")
-                    and output):
-                output = False
+                    and result):
+                result = False
             self.slideOffset += 1
         self.slideOffset -= 1
 
-        return output
+        return self.ModuleStatus.Done if result else self.ModuleStatus.Failed
 
-    def hymnSlides(self, number: int) -> bool:
+    def hymnSlides(self, number: int) -> ModuleStatus:
         hymnSource = self.input["HYMN"][f"Hymn{number}Source"]
         hymnIndex = int(self.config["HYMN_PROPERTIES"][f"Hymn{number}Index"]) + self.slideOffset
+        hymnEnabled = self.input["HYMN"][f"Hymn{number}Enabled"].upper()
 
         # Delete section if source is empty
-        if (hymnSource == ""):
-            return self._deleteSlide(hymnIndex)
+        if (hymnEnabled != "TRUE" or hymnSource == ""):
+            result = self._deleteSlide([hymnIndex])
+            return self.ModuleStatus.Disabled if result else self.ModuleStatus.Failed
 
-        return self._hymnSlide(hymnSource, hymnIndex)
+        result = self._hymnSlide(hymnSource, hymnIndex)
+        return self.ModuleStatus.Done if result else self.ModuleStatus.Failed
 
     # ======================================================================================================
     # ===================================== SLIDE MAKER IMPLEMENTATIONS ====================================
@@ -588,17 +602,17 @@ class SlideMaker:
     # ============================================ TOOLS ===================================================
     # ======================================================================================================
 
-    def _deleteSlide(self, slideIndex: int) -> bool:
-        sourceSlideID = self.gEditor.getSlideID(slideIndex)
-        self.gEditor.deleteSlide(sourceSlideID)
+    def _deleteSlide(self, slideIndexList: List[int]) -> bool:
+        for slideIndex in slideIndexList:
+            sourceSlideID = self.gEditor.getSlideID(slideIndex)
+            self.gEditor.deleteSlide(sourceSlideID)
 
         if (not self.gEditor.commitSlideChanges()):
             return False
 
-        self.slideOffset -= 1
+        self.slideOffset -= len(slideIndexList)
 
-        # Disabled status
-        return False
+        return True
 
     def _str2bool(self, boolString: str) -> bool:
         return boolString.lower() in ("yes", "true", "t", "1")
@@ -659,24 +673,24 @@ if __name__ == '__main__':
             strType = pptType.name
 
             print(f"CREATING {strType.upper()} SLIDES...")
-            print("  sundayServiceSlide() : ", sm.sundayServiceSlide())
-            print("  monthlyScriptureSlide() : ", sm.monthlyScriptureSlide())
-            print("  announcementSlide() : ", sm.announcementSlide())
-            print("  bibleVerseMemorizationSlide() : ", sm.bibleVerseMemorizationSlide())
-            print("  catechismSlide() : ", sm.catechismSlide())
-            print("  bibleVerseMemorizationNextWeekSlide() : ", sm.bibleVerseMemorizationSlide(True))
-            print("  catechismNextWeekSlide() : ", sm.catechismSlide(True))
-            print("  supplicationSlide() : ", sm.supplicationSlide())
-            print("  worshipSlide() : ", sm.worshipSlide())
-            print("  callToWorshipSlide() : ", sm.callToWorshipSlide())
-            print("  hymnSlides(1) : ", sm.hymnSlides(1))
-            print("  prayerOfConfessionSlide() : ", sm.prayerOfConfessionSlide())
-            print("  hymnSlides(2) : ", sm.hymnSlides(2))
-            print("  holyCommunionSlide() : ", sm.holyCommunionSlide())
-            print("  sermonHeaderSlide() : ", sm.sermonHeaderSlide())
-            print("  sermonVerseSlide() : ", sm.sermonVerseSlide())
-            print("  hymnSlides(3) : ", sm.hymnSlides(3))
-            print("  hymnSlides(4) : ", sm.hymnSlides(4))
+            print("  sundayServiceSlide() : ".ljust(45), sm.sundayServiceSlide().name)
+            print("  monthlyScriptureSlide() : ".ljust(45), sm.monthlyScriptureSlide().name)
+            print("  announcementSlide() : ".ljust(45), sm.announcementSlide().name)
+            print("  bibleVerseMemorizationSlide() : ".ljust(45), sm.bibleVerseMemorizationSlide().name)
+            print("  catechismSlide() : ".ljust(45), sm.catechismSlide().name)
+            print("  bibleVerseMemorizationNextWeekSlide() : ".ljust(45), sm.bibleVerseMemorizationSlide(True).name)
+            print("  catechismNextWeekSlide() : ".ljust(45), sm.catechismSlide(True).name)
+            print("  supplicationSlide() : ".ljust(45), sm.supplicationSlide().name)
+            print("  worshipSlide() : ".ljust(45), sm.worshipSlide().name)
+            print("  callToWorshipSlide() : ".ljust(45), sm.callToWorshipSlide().name)
+            print("  hymnSlides(1) : ".ljust(45), sm.hymnSlides(1).name)
+            print("  prayerOfConfessionSlide() : ".ljust(45), sm.prayerOfConfessionSlide().name)
+            print("  hymnSlides(2) : ".ljust(45), sm.hymnSlides(2).name)
+            print("  holyCommunionSlide() : ".ljust(45), sm.holyCommunionSlide().name)
+            print("  sermonHeaderSlide() : ".ljust(45), sm.sermonHeaderSlide().name)
+            print("  sermonVerseSlide() : ".ljust(45), sm.sermonVerseSlide().name)
+            print("  hymnSlides(3) : ".ljust(45), sm.hymnSlides(3).name)
+            print("  hymnSlides(4) : ".ljust(45), sm.hymnSlides(4).name)
 
             print(f"OPENING {strType.upper()} SLIDES...")
             sm._openSlideInBrowser()
