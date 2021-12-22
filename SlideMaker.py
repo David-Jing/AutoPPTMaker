@@ -93,7 +93,7 @@ class SlideMaker:
         Logging.initializeLoggingService()
 
         if not os.path.exists("Data/" + strType + "SlideProperties.ini"):
-            raise IOError(f"ERROR : {strType}SlideProperties.ini config file cannot be found.")
+            raise IOError(f"\tERROR : {strType}SlideProperties.ini config file cannot be found.")
 
         # Access slide property data
         self.config = configparser.ConfigParser()
@@ -122,15 +122,23 @@ class SlideMaker:
 
         # Check if ordering mode exists
         if not globalConfig.has_section(slideOrderModeValue):
-            raise IOError(f"ERROR : Slide ordering mode [{slideOrderModeValue}] cannot be found.")
+            raise IOError(f"\tERROR : Slide ordering mode [{slideOrderModeValue}] cannot be found.")
 
         # Read the entire global config section
         slideOrdering = dict(globalConfig.items(slideOrderModeValue))
 
         for i in range(len(slideOrdering.keys()), 0, -1):
+            # Check if key number exists
+            if not str(i) in slideOrdering:
+                raise IOError(f"\tERROR : Ordering number [{i}] does not exist.")
+
             slideType = slideOrdering[str(i)]
             slideIDList = []
             status = self.ModuleStatus.Failed
+
+            # Check if slideType exists:
+            if not slideType in self.slideComponentCaller:
+                raise IOError(f"\tERROR : Slide type [{slideType}] does not exist.")
 
             # Check for extra method arguments
             if slideType in self.slideComponentArgument:
