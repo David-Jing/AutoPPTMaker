@@ -26,3 +26,18 @@ class Utility:
         # A precise measurement to indicate if text will align or will take up multiple lines
         text = ''.join([i if ord(i) < 128 else ' ' for i in text])  # Replace all non-ascii characters
         return int(Utility.afm.string_width_height(text)[0])
+
+# ==============================================================================================
+# ============================================ TESTER ==========================================
+# ==============================================================================================
+
+
+if __name__ == '__main__':
+    inputStr = ""
+    while True:
+        inputStr = str(input())
+
+        if inputStr == 'q':
+            break
+
+        print(f"Length = {Utility.getVisualLength(inputStr)}")

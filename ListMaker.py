@@ -85,8 +85,9 @@ class ListMaker:
 
                 currContentList = [contentStr]
                 currListStartIndex = [0]
+                currIndex = 0
 
-            currIndex = len(contentStr)
+            currIndex += len(contentStr)
             currLines += len(content)
 
         # Append remaining currContentList

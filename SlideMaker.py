@@ -3,8 +3,9 @@ import os
 import sys
 import time
 import traceback
+import numpy
 
-from typing import List
+from typing import Dict, List, Tuple
 from enum import Enum
 
 from HymnMaker import HymnMaker
@@ -34,9 +35,9 @@ class SlideMaker:
         Failed = 1
         Disabled = 2
 
-    def __init__(self) -> None:
-        # Offset for when creating new slides
-        self.slideOffset = 0
+    def __init__(self, seed: int) -> None:
+        # Seeded RNG for consistency within this run instance
+        self.rng = numpy.random.RandomState(seed)
 
         # Access slide input data
         if not os.path.exists("SlideInputs.ini"):
@@ -44,18 +45,55 @@ class SlideMaker:
         self.input = configparser.ConfigParser()
         self.input.read("SlideInputs.ini")
 
-    def setType(self, pptType: PPTMode) -> None:
-        strType = pptType.name
+        self.slideComponentCaller = {
+            'SundayServiceHeader':          self.sundayServiceSlide,
+            'MonthlyScripture':             self.monthlyScriptureSlide,
+            'Announcements':                self.announcementSlide,
+            'BibleMemorization':            self.bibleVerseMemorizationSlide,
+            'Catechism':                    self.catechismSlide,
+            'BibleMemorizationNextWeek':    self.bibleVerseMemorizationSlide,
+            'CatechismNextWeek':            self.catechismSlide,
+            'Supplications':                self.supplicationSlide,
+            'WorshipHeader':                self.worshipSlide,
+            'CallToWorship':                self.callToWorshipSlide,
+            'Hymn1':                        self.hymnSlide,
+            'PrayerOfConfession':           self.prayerOfConfessionSlide,
+            'LordsPrayer':                  self.lordsPrayerSlide,
+            'Hymn2':                        self.hymnSlide,
+            'HolyCommunion':                self.holyCommunionSlide,
+            'ApostleCreed':                 self.apostleCreedSlide,
+            'SermonHeader':                 self.sermonHeaderSlide,
+            'SermonVerse':                  self.sermonVerseSlide,
+            'Hymn3':                        self.hymnSlide,
+            'Offering':                     self.offeringSlide,
+            'Hymn4':                        self.hymnSlide,
+            'Doxology':                     self.doxologySlide,
+            'Benediction':                  self.benedictionSlide,
+            'NextWeekSchedule':             self.nextWeekScheduleSlide,
+        }
 
-        if not os.path.exists("Data/" + strType + "SlideProperties.ini"):
-            raise IOError(f"ERROR : {strType}SlideProperties.ini config file cannot be found.")
+        # Slide component should have 0 or 1 arguments
+        self.slideComponentArgument = {
+            'BibleMemorizationNextWeek':    True,
+            'CatechismNextWeek':            True,
+            'Hymn1':                        1,
+            'Hymn2':                        2,
+            'Hymn3':                        3,
+            'Hymn4':                        4,
+        }
+
+    def setType(self, pptType: PPTMode) -> None:
+        # Initialize logging
+        Logging.initializeLoggingService()
+
+        strType = pptType.name
 
         self.gEditor = GoogleAPITools(strType)
         self.verseMaker = VerseMaker(strType)
         self.hymnMaker = HymnMaker(strType)
 
-        # Initialize logging
-        Logging.initializeLoggingService()
+        if not os.path.exists("Data/" + strType + "SlideProperties.ini"):
+            raise IOError(f"ERROR : {strType}SlideProperties.ini config file cannot be found.")
 
         # Access slide property data
         self.config = configparser.ConfigParser()
@@ -64,166 +102,265 @@ class SlideMaker:
         # General linespacing for all slides
         self.lineSpacing = int(self.config["SLIDE_PROPERTIES"]["SlideLineSpacing"])
 
+        # Hymn slide randomizer
+        self.hymnSlideIndex = numpy.arange(int(self.config["HYMN_PROPERTIES"]["HymnStartIndex"]), self.gEditor.getPresentationLength())
+        self.rng.shuffle(self.hymnSlideIndex)
+
+        print(f"CREATING {strType.upper()} SLIDES...")
+
     # ======================================================================================================
-    # ========================================== SLIDE MAKERS ==============================================
+    # ========================================= MASTER METHOD ==============================================
     # ======================================================================================================
 
-    def sundayServiceSlide(self) -> ModuleStatus:
+    def createSlide(self) -> bool:
+        # Access global data
+        globalConfig = configparser.ConfigParser()
+        globalConfig.read("Data/GlobalProperties.ini")
+
+        # Get ordering mode
+        slideOrderModeValue = self.input["SLIDE_ORDERING_MODE"]["SlideOrderMode"]
+
+        # Check if ordering mode exists
+        if not globalConfig.has_section(slideOrderModeValue):
+            raise IOError(f"ERROR : Slide ordering mode [{slideOrderModeValue}] cannot be found.")
+
+        # Read the entire global config section
+        slideOrdering = dict(globalConfig.items(slideOrderModeValue))
+
+        for i in range(len(slideOrdering.keys()), 0, -1):
+            slideType = slideOrdering[str(i)]
+            slideIDList = []
+            status = self.ModuleStatus.Failed
+
+            # Check for extra method arguments
+            if slideType in self.slideComponentArgument:
+                status, slideIDList = self.slideComponentCaller[slideType](self.slideComponentArgument[slideType])  # type: ignore
+            else:
+                status, slideIDList = self.slideComponentCaller[slideType]()  # type: ignore
+
+            # Move slides to beginning
+            if slideIDList:
+                self.gEditor.moveSlideSet(slideIDList, 0)
+
+            print(f"  {slideType} : ".ljust(45), status.name)
+
+        # Get rid of template slides (recall commit doesn't been called yet)
+        for i in range(self.gEditor.getPresentationLength()):
+            self.gEditor.deleteSlide(self.gEditor.getSlideID(i))
+
+        # Commit slide modifications
+        return self.gEditor.commitSlideChanges()
+
+    # ======================================================================================================
+    # ====================================== SLIDE COMPONENT MAKERS ========================================
+    # ======================================================================================================
+
+    def sundayServiceSlide(self) -> Tuple[ModuleStatus, List[str]]:
         title = self.input["SUNDAY_SERVICE_HEADER"]["SundayServiceHeaderTitle"].upper()
 
-        result = self._titleSlide(title, "SUNDAY_SERVICE_HEADER_PROPERTIES", "SundayServiceHeader")
-        return self.ModuleStatus.Done if result else self.ModuleStatus.Failed
+        slideIDList = self._titleSlide(title, "SUNDAY_SERVICE_HEADER_PROPERTIES", "SundayServiceHeader")
+        status = self.ModuleStatus.Done if slideIDList else self.ModuleStatus.Failed
+        return (status, slideIDList)
 
-    def monthlyScriptureSlide(self) -> ModuleStatus:
+    def monthlyScriptureSlide(self) -> Tuple[ModuleStatus, List[str]]:
         title = self.input["MONTHLY_SCRIPTURE"]["MonthlyScriptureTitle"].upper()
         source = self.input["MONTHLY_SCRIPTURE"]["MonthlyScriptureSource"].upper()
         maxLineLength = int(self.config["MONTHLY_SCRIPTURE_PROPERTIES"]["MonthlyScriptureMaxLineLength"])
 
-        result = self._scriptureSingleSlide(title, source, maxLineLength,
-                                            "MONTHLY_SCRIPTURE_PROPERTIES", "MonthlyScripture")
-        return self.ModuleStatus.Done if result else self.ModuleStatus.Failed
+        slideIDList = self._scriptureSingleSlide(title, source, maxLineLength,
+                                                 "MONTHLY_SCRIPTURE_PROPERTIES", "MonthlyScripture")
+        status = self.ModuleStatus.Done if slideIDList else self.ModuleStatus.Failed
+        return (status, slideIDList)
 
-    def announcementSlide(self) -> ModuleStatus:
+    def announcementSlide(self) -> Tuple[ModuleStatus, List[str]]:
+        autoRetrieve = self.input["ANNOUNCEMENTS"]["AnnouncementsAutoRetrieve"].upper()
         title = self.input["ANNOUNCEMENTS"]["AnnouncementsTitle"].upper()
-        announcementList = self.gEditor.getAnnouncements()
 
-        result = self._textMultiSlide(title, announcementList, "ANNOUNCEMENTS_PROPERTIES", "Announcements")
-        return self.ModuleStatus.Done if result else self.ModuleStatus.Failed
+        if (autoRetrieve != "TRUE"):
+            slideIDList = self._headerOnlySlide(title, "ANNOUNCEMENTS_PROPERTIES", "Announcements")
+            status = self.ModuleStatus.Done if slideIDList else self.ModuleStatus.Failed
+            return (status, slideIDList)
+        else:
+            announcementList = self.gEditor.getAnnouncements()
 
-    def bibleVerseMemorizationSlide(self, nextWeek: bool = False) -> ModuleStatus:
+            slideIDList = self._textMultiSlide(title, announcementList, "ANNOUNCEMENTS_PROPERTIES", "Announcements")
+            status = self.ModuleStatus.Done if slideIDList else self.ModuleStatus.Failed
+            return (status, slideIDList)
+
+    def bibleVerseMemorizationSlide(self, nextWeek: bool = False) -> Tuple[ModuleStatus, List[str]]:
         lastWeekString = "LastWeek" if not nextWeek else ""
         title = self.input["BIBLE_MEMORIZATION"]["BibleMemorization" + lastWeekString + "Title"].upper()
         source = self.input["BIBLE_MEMORIZATION"]["BibleMemorization" + lastWeekString + "Source"].upper()
         maxLineLength = int(self.config["BIBLE_MEMORIZATION_PROPERTIES"]["BibleMemorizationMaxLineLength"])
 
-        result = self._scriptureSingleSlide(title, source, maxLineLength,
-                                            "BIBLE_MEMORIZATION_PROPERTIES", "BibleMemorization", nextWeek)
-        return self.ModuleStatus.Done if result else self.ModuleStatus.Failed
+        slideIDList = self._scriptureSingleSlide(title, source, maxLineLength,
+                                                 "BIBLE_MEMORIZATION_PROPERTIES", "BibleMemorization", nextWeek)
+        status = self.ModuleStatus.Done if slideIDList else self.ModuleStatus.Failed
+        return (status, slideIDList)
 
-    def catechismSlide(self, nextWeek: bool = False) -> ModuleStatus:
+    def catechismSlide(self, nextWeek: bool = False) -> Tuple[ModuleStatus, List[str]]:
         title = self.input["CATECHISM"]["Catechism" + ("LastWeek" if not nextWeek else "") + "Title"].upper()
 
-        result = self._headerOnlySlide(title, "CATECHISM_PROPERTIES", "Catechism", nextWeek)
-        return self.ModuleStatus.Done if result else self.ModuleStatus.Failed
+        slideIDList = self._headerOnlySlide(title, "CATECHISM_PROPERTIES", "Catechism", nextWeek)
+        status = self.ModuleStatus.Done if slideIDList else self.ModuleStatus.Failed
+        return (status, slideIDList)
 
-    def supplicationSlide(self) -> ModuleStatus:
+    def supplicationSlide(self) -> Tuple[ModuleStatus, List[str]]:
         enabled = self.input["SUPPLICATIONS"]["SupplicationsEnabled"].upper()
+        autoRetrieve = self.input["SUPPLICATIONS"]["SupplicationAutoRetrieve"].upper()
         title = self.input["SUPPLICATIONS"]["SupplicationsTitle"].upper()
-        supplicationList = self.gEditor.getSupplications()
 
-        if (enabled == "TRUE"):
-            result = self._numListMultiSlide(title, supplicationList, "SUPPLICATIONS_PROPERTIES", "Supplications")
-            return self.ModuleStatus.Done if result else self.ModuleStatus.Failed
+        if (enabled != "TRUE"):
+            return (self.ModuleStatus.Disabled, [])
+
+        if (autoRetrieve != "TRUE"):
+            slideIDList = self._headerOnlySlide(title, "SUPPLICATIONS_PROPERTIES", "Supplications")
+            status = self.ModuleStatus.Done if slideIDList else self.ModuleStatus.Failed
+            return (status, slideIDList)
         else:
-            slideIndex = int(self.config["SUPPLICATIONS_PROPERTIES"]["SupplicationsIndex"]) + self.slideOffset
-            result = self._deleteSlide([slideIndex])
-            return self.ModuleStatus.Disabled if result else self.ModuleStatus.Failed
+            supplicationList = self.gEditor.getSupplications()
 
-    def worshipSlide(self) -> ModuleStatus:
+            slideIDList = self._numListMultiSlide(title, supplicationList, "SUPPLICATIONS_PROPERTIES", "Supplications")
+            status = self.ModuleStatus.Done if slideIDList else self.ModuleStatus.Failed
+            return (status, slideIDList)
+
+    def worshipSlide(self) -> Tuple[ModuleStatus, List[str]]:
         title = self.input["WORSHIP_HEADER"]["WorshipHeaderTitle"].upper()
 
-        result = self._titleSlide(title, "WORSHIP_HEADER_PROPERTIES", "WorshipHeader")
-        return self.ModuleStatus.Done if result else self.ModuleStatus.Failed
+        slideIDList = self._titleSlide(title, "WORSHIP_HEADER_PROPERTIES", "WorshipHeader")
+        status = self.ModuleStatus.Done if slideIDList else self.ModuleStatus.Failed
+        return (status, slideIDList)
 
-    def callToWorshipSlide(self) -> ModuleStatus:
+    def callToWorshipSlide(self) -> Tuple[ModuleStatus, List[str]]:
         source = self.input["CALL_TO_WORSHIP"]["CallToWorshipSource"].upper()
+        enabled = self.input["CALL_TO_WORSHIP"]["CallToWorshipEnabled"].upper()
         maxLineLength = int(self.config["CALL_TO_WORSHIP_PROPERTIES"]["CallToWorshipMaxLineLength"])
         maxLinesPerSlide = int(self.config["CALL_TO_WORSHIP_PROPERTIES"]["CallToWorshipMaxLines"])
 
-        # Delete section if source is empty
-        if (source == ""):
-            result = self._deleteSlide([int(self.config["CALL_TO_WORSHIP_PROPERTIES"]["CallToWorshipIndex"]) + self.slideOffset])
-            return self.ModuleStatus.Disabled if result else self.ModuleStatus.Failed
+        # Do not generate section if not enabled
+        if (enabled != "TRUE" or source == ""):
+            return (self.ModuleStatus.Disabled, [])
 
-        result = self._scriptureMultiSlide(source, maxLineLength, maxLinesPerSlide,
-                                           "CALL_TO_WORSHIP_PROPERTIES", "CallToWorship")
-        return self.ModuleStatus.Done if result else self.ModuleStatus.Failed
+        slideIDList = self._scriptureMultiSlide(source, maxLineLength, maxLinesPerSlide,
+                                                "CALL_TO_WORSHIP_PROPERTIES", "CallToWorship")
+        status = self.ModuleStatus.Done if slideIDList else self.ModuleStatus.Failed
+        return (status, slideIDList)
 
-    def prayerOfConfessionSlide(self) -> ModuleStatus:
+    def lordsPrayerSlide(self) -> Tuple[ModuleStatus, List[str]]:
+        slideIDList = self._staticSlides("MISC_PROPERTIES", "LordsPrayer")
+        return (self.ModuleStatus.Done, slideIDList)
+
+    def prayerOfConfessionSlide(self) -> Tuple[ModuleStatus, List[str]]:
         title = self.input["PRAYER_OF_CONFESSION"]["PrayerOfConfessionTitle"].upper()
         source = self.input["PRAYER_OF_CONFESSION"]["PrayerOfConfessionSource"].upper()
         enabled = self.input["PRAYER_OF_CONFESSION"]["PrayerOfConfessionEnabled"].upper()
         maxLineLength = int(self.config["PRAYER_OF_CONFESSION_PROPERTIES"]["PrayerOfConfessionMaxLineLength"])
 
-        # Delete section if source is empty
+        # Do not generate section if not enabled
         if (enabled != "TRUE" or source == ""):
-            result = self._deleteSlide([int(self.config["PRAYER_OF_CONFESSION_PROPERTIES"]["PrayerOfConfessionIndex"]) + self.slideOffset])
-            return self.ModuleStatus.Disabled if result else self.ModuleStatus.Failed
+            return (self.ModuleStatus.Disabled, [])
 
-        result = self._scriptureSingleSlide(title, source, maxLineLength,
-                                            "PRAYER_OF_CONFESSION_PROPERTIES", "PrayerOfConfession")
-        return self.ModuleStatus.Done if result else self.ModuleStatus.Failed
+        slideIDList = self._scriptureSingleSlide(title, source, maxLineLength,
+                                                 "PRAYER_OF_CONFESSION_PROPERTIES", "PrayerOfConfession")
+        status = self.ModuleStatus.Done if slideIDList else self.ModuleStatus.Failed
+        return (status, slideIDList)
 
-    def holyCommunionSlide(self) -> ModuleStatus:
+    def holyCommunionSlide(self) -> Tuple[ModuleStatus, List[str]]:
         enabled = self.input["HOLY_COMMUNION"]["HolyCommunionSlidesEnabled"].upper()
-        slideIndex = int(self.config["HOLY_COMMUNION_PROPERTIES"]["HolyCommunionIndex"]) + self.slideOffset
-        numOfSlides = int(self.config["HOLY_COMMUNION_PROPERTIES"]["HolyCommunionSlides"])
 
-        # If not enabled, delete section
+        # Do not generate section if not enabled
         if (enabled != "TRUE"):
-            result = self._deleteSlide([i for i in range(slideIndex, slideIndex + numOfSlides)])
-            return self.ModuleStatus.Disabled if result else self.ModuleStatus.Failed
+            return (self.ModuleStatus.Disabled, [])
 
-        return self.ModuleStatus.Done
+        slideIDList = self._staticSlides("MISC_PROPERTIES", "HolyCommunion")
+        return (self.ModuleStatus.Done, slideIDList)
 
-    def sermonHeaderSlide(self) -> ModuleStatus:
+    def apostleCreedSlide(self) -> Tuple[ModuleStatus, List[str]]:
+        slideIDList = self._staticSlides("MISC_PROPERTIES", "ApostleCreed")
+        return (self.ModuleStatus.Done, slideIDList)
+
+    def sermonHeaderSlide(self) -> Tuple[ModuleStatus, List[str]]:
         title = self.input["SERMON_HEADER"]["SermonHeaderTitle"].upper()
         speaker = self.input["SERMON_HEADER"]["SermonHeaderSpeaker"]
 
-        result = self._sermonHeaderSlide(title, speaker, "SERMON_HEADER_PROPERTIES", "SermonHeader")
-        return self.ModuleStatus.Done if result else self.ModuleStatus.Failed
+        slideIDList = self._sermonHeaderSlide(title, speaker, "SERMON_HEADER_PROPERTIES", "SermonHeader")
+        status = self.ModuleStatus.Done if slideIDList else self.ModuleStatus.Failed
+        return (status, slideIDList)
 
-    def sermonVerseSlide(self) -> ModuleStatus:
+    def sermonVerseSlide(self) -> Tuple[ModuleStatus, List[str]]:
         # Allow for multiple unique sources separated by ","
         sources = self.input["SERMON_VERSE"]["SermonVerseSource"].upper()
         sourceList = sources.split(",")
         maxLineLength = int(self.config["SERMON_VERSE_PROPERTIES"]["SermonVerseMaxLineLength"])
         maxLinesPerSlide = int(self.config["SERMON_VERSE_PROPERTIES"]["SermonVerseMaxLines"])
 
-        # Generate templates for each verse source
-        slideIndex = int(self.config["SERMON_VERSE_PROPERTIES"]["SermonVerseIndex"]) + self.slideOffset
-        if not self._duplicateSlide(len(sourceList) - 1, slideIndex):
-            return self.ModuleStatus.Failed
-
         # Iterate and generate the slides by each unique source
         result = True
-        for source in sourceList:
-            if (not self._scriptureMultiSlide(source.strip(), maxLineLength, maxLinesPerSlide, "SERMON_VERSE_PROPERTIES", "SermonVerse")
-                    and result):
+        slideIDList = []
+        for i in range(len(sourceList) - 1, -1, -1):
+            slideIDListSub = self._scriptureMultiSlide(sourceList[i].strip(), maxLineLength, maxLinesPerSlide, "SERMON_VERSE_PROPERTIES", "SermonVerse")
+
+            if (not slideIDListSub and result):
                 result = False
-            self.slideOffset += 1
-        self.slideOffset -= 1
 
-        return self.ModuleStatus.Done if result else self.ModuleStatus.Failed
+            slideIDList = slideIDListSub + slideIDList
 
-    def hymnSlides(self, number: int) -> ModuleStatus:
-        hymnSource = self.input["HYMN"][f"Hymn{number}Source"]
-        hymnIndex = int(self.config["HYMN_PROPERTIES"][f"Hymn{number}Index"]) + self.slideOffset
-        hymnEnabled = self.input["HYMN"][f"Hymn{number}Enabled"].upper()
+        status = self.ModuleStatus.Done if result else self.ModuleStatus.Failed
+        return (status, slideIDList)
 
-        # Delete section if source is empty
-        if (hymnEnabled != "TRUE" or hymnSource == ""):
-            result = self._deleteSlide([hymnIndex])
-            return self.ModuleStatus.Disabled if result else self.ModuleStatus.Failed
+    def offeringSlide(self) -> Tuple[ModuleStatus, List[str]]:
+        slideIDList = self._staticSlides("MISC_PROPERTIES", "Offering")
+        return (self.ModuleStatus.Done, slideIDList)
 
-        result = self._hymnSlide(hymnSource, hymnIndex)
-        return self.ModuleStatus.Done if result else self.ModuleStatus.Failed
+    def hymnSlide(self, number: int) -> Tuple[ModuleStatus, List[str]]:
+        source = self.input["HYMN"][f"Hymn{number}Source"]
+        enabled = self.input["HYMN"][f"Hymn{number}Enabled"].upper()
+
+        # Slide randomizer
+        slideIndex = self.hymnSlideIndex[number - 1]
+
+        # Do not generate section if not enabled
+        if (enabled != "TRUE" or source == ""):
+            return (self.ModuleStatus.Disabled, [])
+
+        slideIDList = self._hymnSlide(source, slideIndex)
+        status = self.ModuleStatus.Done if slideIDList else self.ModuleStatus.Failed
+        return (status, slideIDList)
+
+    def doxologySlide(self) -> Tuple[ModuleStatus, List[str]]:
+        slideIDList = self._staticSlides("MISC_PROPERTIES", "Doxology")
+        return (self.ModuleStatus.Done, slideIDList)
+
+    def benedictionSlide(self) -> Tuple[ModuleStatus, List[str]]:
+        slideIDList = self._staticSlides("MISC_PROPERTIES", "Benediction")
+        return (self.ModuleStatus.Done, slideIDList)
+
+    def nextWeekScheduleSlide(self) -> Tuple[ModuleStatus, List[str]]:
+        slideIDList = self._staticSlides("MISC_PROPERTIES", "NextWeekSchedule")
+        return (self.ModuleStatus.Done, slideIDList)
 
     # ======================================================================================================
     # ===================================== SLIDE MAKER IMPLEMENTATIONS ====================================
     # ======================================================================================================
 
-    def _titleSlide(self, title: str, propertyName: str, dataNameHeader: str) -> bool:
+    def _titleSlide(self, title: str, propertyName: str, dataNameHeader: str) -> List[str]:
         (dateString, cordinalIndex) = self.gEditor.getFormattedNextSundayDate(self.gEditor.DateFormatMode.Full)
+        slideIndex = int(self.config[propertyName][dataNameHeader + "Index"])
+
+        # Generate create duplicate request
+        objIDMappingList = self._duplicateSlide(1, slideIndex)
+
+        refData = self.gEditor.getSlideTextData(slideIndex)
+        refSlideID = self.gEditor.getSlideID(slideIndex)
+        slideIDList = [objIDMappingList[0][refSlideID]]
 
         checkPoint = [False, False]
         try:
-            data = self.gEditor.getSlideTextData(int(self.config[propertyName][dataNameHeader + "Index"]) + self.slideOffset)
-            for item in data:
+            for item in refData:
                 if '{Title}' in item[1]:
                     checkPoint[0] = True
                     self._insertText(
-                        objectID=item[0],
+                        objectID=objIDMappingList[0][item[0]],
                         text=title.upper(),
                         size=int(self.config[propertyName][dataNameHeader + "TitleTextSize"]),
                         bold=self._str2bool(self.config[propertyName][dataNameHeader + "TitleBolded"]),
@@ -233,7 +370,7 @@ class SlideMaker:
                 elif '{Text}' in item[1]:
                     checkPoint[1] = True
                     self._insertText(
-                        objectID=item[0],
+                        objectID=objIDMappingList[0][item[0]],
                         text=dateString[:-5] + "," + dateString[-5:],   # Add comma between year and date
                         size=int(self.config[propertyName][dataNameHeader + "DateTextSize"]),
                         bold=self._str2bool(self.config[propertyName][dataNameHeader + "DateBolded"]),
@@ -241,21 +378,22 @@ class SlideMaker:
                         underlined=self._str2bool(self.config[propertyName][dataNameHeader + "DateUnderlined"]),
                         alignment=self.config[propertyName][dataNameHeader + "DateAlignment"])
 
-                    self.gEditor.setTextSuperScript(item[0], cordinalIndex, cordinalIndex + 2)
+                    self.gEditor.setTextSuperScript(objIDMappingList[0][item[0]], cordinalIndex, cordinalIndex + 2)
+
         except Exception:
             print(f"\tERROR : {traceback.format_exc()}")
-            return False
+            return []
 
         if (False in checkPoint):
             print(f"\tERROR : {checkPoint.count(True)} out of {len(checkPoint)} text placeholders found.")
-            return False
+            return []
 
-        return self.gEditor.commitSlideChanges()
+        return slideIDList
 
-    def _hymnSlide(self, source: str, slideIndex: int) -> bool:
+    def _hymnSlide(self, source: str, slideIndex: int) -> List[str]:
         if (not self.hymnMaker.setSource(source)):
             print(f"\tERROR : Hymn [{source}] not found.")
-            return False
+            return []
 
         [titleList, formattedLyricsList, lookupSource] = self.hymnMaker.getContent()
 
@@ -281,21 +419,26 @@ class SlideMaker:
             else:
                 print(f"  MULTILINE FORMAT DEFAULT : {titleLength}, {maxCharUnitLength}, {minCharUnitLength}")
 
-        # Generate create duplicate request and commit it
-        if not self._duplicateSlide(len(titleList) - 1, slideIndex):
-            return False
+        # Generate create duplicate request
+        objIDMappingList = self._duplicateSlide(len(titleList), slideIndex)
+
+        refData = self.gEditor.getSlideTextData(slideIndex)
+        refSlideID = self.gEditor.getSlideID(slideIndex)
+        slideIDList = []
 
         # Insert title and lyrics data
-        for i in range(slideIndex, slideIndex + len(titleList)):
+        for i in range(len(titleList)):
+            # Save slide ID
+            slideIDList.append(objIDMappingList[i][refSlideID])
+
             checkPoint = [False, False]
-            data = self.gEditor.getSlideTextData(i)
             try:
-                for item in data:
+                for item in refData:
                     if ('{Title}' in item[1]):
                         checkPoint[0] = True
                         self._insertText(
-                            objectID=item[0],
-                            text=titleList[i - slideIndex],
+                            objectID=objIDMappingList[i][item[0]],
+                            text=titleList[i],
                             size=titleFontSize,
                             bold=self._str2bool(self.config["HYMN_PROPERTIES"]["HymnTitleBolded"]),
                             italic=self._str2bool(self.config["HYMN_PROPERTIES"]["HymnTitleItalicized"]),
@@ -304,8 +447,8 @@ class SlideMaker:
                     elif ('{Text}' in item[1]):
                         checkPoint[1] = True
                         self._insertText(
-                            objectID=item[0],
-                            text=formattedLyricsList[i - slideIndex],
+                            objectID=objIDMappingList[i][item[0]],
+                            text=formattedLyricsList[i],
                             size=int(self.config["HYMN_PROPERTIES"]["HymnTextSize"]),
                             bold=self._str2bool(self.config["HYMN_PROPERTIES"]["HymnBolded"]),
                             italic=self._str2bool(self.config["HYMN_PROPERTIES"]["HymnItalicized"]),
@@ -313,20 +456,21 @@ class SlideMaker:
                             alignment=self.config["HYMN_PROPERTIES"]["HymnAlignment"])
 
                         if (multiLineTitle):
-                            self.gEditor.updatePageElementTransform(item[0], translateY=int(self.config["HYMN_PROPERTIES"]["HymnLoweredUnitHeight"]))
+                            self.gEditor.updatePageElementTransform(objIDMappingList[0][item[0]], translateY=int(self.config["HYMN_PROPERTIES"]["HymnLoweredUnitHeight"]))
             except Exception:
                 print(f"\tERROR : {traceback.format_exc()}")
-                return False
+                return []
 
             if (False in checkPoint):
                 print(f"\tERROR : {checkPoint.count(True)} out of {len(checkPoint)} text placeholders found.")
-                return False
+                return []
 
-        return self.gEditor.commitSlideChanges()
+        return slideIDList
 
-    def _scriptureSingleSlide(self, title: str, source: str, charPerLine: int, propertyName: str, dataNameHeader: str, nextWeek: bool = False) -> bool:
+    def _scriptureSingleSlide(self, title: str, source: str, charPerLine: int, propertyName: str, dataNameHeader: str, nextWeek: bool = False) -> List[str]:
         # Assumes monthly scripture is short enough to fit in one slide
         nextWeekString = "NextWeek" if nextWeek else ""
+        slideIndex = int(self.config[propertyName][dataNameHeader + nextWeekString + "Index"])
 
         # Generate slide anyway if source verse cannot be found
         if not self.verseMaker.setSource(source, charPerLine):
@@ -336,14 +480,20 @@ class SlideMaker:
         else:
             [verseString, ssIndexList] = self.verseMaker.getVerseString()
 
+        # Generate create duplicate request
+        objIDMappingList = self._duplicateSlide(1, slideIndex)
+
+        refData = self.gEditor.getSlideTextData(slideIndex)
+        refSlideID = self.gEditor.getSlideID(slideIndex)
+        slideIDList = [objIDMappingList[0][refSlideID]]
+
         checkPoint = [False, False]
         try:
-            data = self.gEditor.getSlideTextData(int(self.config[propertyName][dataNameHeader + nextWeekString + "Index"]) + self.slideOffset)
-            for item in data:
+            for item in refData:
                 if '{Title}' in item[1]:
                     checkPoint[0] = True
                     self._insertText(
-                        objectID=item[0],
+                        objectID=objIDMappingList[0][item[0]],
                         text=title,
                         size=int(self.config[propertyName][dataNameHeader + nextWeekString + "TitleTextSize"]),
                         bold=self._str2bool(self.config[propertyName][dataNameHeader + "TitleBolded"]),
@@ -353,7 +503,7 @@ class SlideMaker:
                 elif '{Text}' in item[1]:
                     checkPoint[1] = True
                     self._insertText(
-                        objectID=item[0],
+                        objectID=objIDMappingList[0][item[0]],
                         text=verseString,
                         size=int(self.config[propertyName][dataNameHeader + "TextSize"]),
                         bold=self._str2bool(self.config[propertyName][dataNameHeader + "Bolded"]),
@@ -363,46 +513,53 @@ class SlideMaker:
 
                     # Superscript and bold the verse numbers, and set paragraph spacing between the verses
                     for ssRange in ssIndexList:
-                        self.gEditor.setTextSuperScript(item[0], ssRange[1], ssRange[2])
-                        self.gEditor.setBold(item[0], ssRange[1], ssRange[2])
+                        self.gEditor.setTextSuperScript(objIDMappingList[0][item[0]], ssRange[1], ssRange[2])
+                        self.gEditor.setBold(objIDMappingList[0][item[0]], ssRange[1], ssRange[2])
                         if (ssRange[1] > 0 and ssRange[0] == self.verseMaker.SSType.VerseNumber):  # No need for paragraph spacing in initial line
-                            self.gEditor.setSpaceAbove(item[0], ssRange[1], 10)
+                            self.gEditor.setSpaceAbove(objIDMappingList[0][item[0]], ssRange[1], 10)
         except Exception:
             print(f"\tERROR : {traceback.format_exc()}")
-            return False
+            return []
 
         if (False in checkPoint):
             print(f"\tERROR : {checkPoint.count(True)} out of {len(checkPoint)} text placeholders found.")
-            return False
+            return []
 
-        return self.gEditor.commitSlideChanges()
+        return slideIDList
 
-    def _scriptureMultiSlide(self, source: str, maxLineLength: int, maxLinesPerSlide: int, propertyName: str, dataNameHeader: str) -> bool:
+    def _scriptureMultiSlide(self, source: str, maxLineLength: int, maxLinesPerSlide: int, propertyName: str, dataNameHeader: str) -> List[str]:
         # Assumes monthly scripture is short enough to fit in one slide
         if (not self.verseMaker.setSource(source, maxLineLength)):
             print(f"\tERROR : Verse {source} not found.")
-            return False
+            return []
 
         [title, slideVersesList, slideSSIndexList] = self.verseMaker.getVerseStringMultiSlide(maxLinesPerSlide)
 
         # Generate create duplicate request and commit it
-        slideIndex = int(self.config[propertyName][dataNameHeader + "Index"]) + self.slideOffset
-        if not self._duplicateSlide(len(slideVersesList) - 1, slideIndex):
-            return False
+        slideIndex = int(self.config[propertyName][dataNameHeader + "Index"])
+
+        # Generate create duplicate request
+        objIDMappingList = self._duplicateSlide(len(slideVersesList), slideIndex)
+
+        refData = self.gEditor.getSlideTextData(slideIndex)
+        refSlideID = self.gEditor.getSlideID(slideIndex)
+        slideIDList = []
 
         # Get units of paragraph that separates verse numbers
         paragraphSpace = int(self.config["VERSE_PROPERTIES"]["VerseParagraphSpace"])
 
         # Insert title and verses data
-        for i in range(slideIndex, slideIndex + len(slideVersesList)):
+        for i in range(len(slideVersesList)):
+            # Save slide ID
+            slideIDList.append(objIDMappingList[i][refSlideID])
+
             checkPoint = [False, False]
             try:
-                data = self.gEditor.getSlideTextData(i)
-                for item in data:
+                for item in refData:
                     if '{Title}' in item[1]:
                         checkPoint[0] = True
                         self._insertText(
-                            objectID=item[0],
+                            objectID=objIDMappingList[i][item[0]],
                             text=title,
                             size=int(self.config[propertyName][dataNameHeader + "TitleTextSize"]),
                             bold=self._str2bool(self.config[propertyName][dataNameHeader + "TitleBolded"]),
@@ -412,8 +569,8 @@ class SlideMaker:
                     elif '{Text}' in item[1]:
                         checkPoint[1] = True
                         self._insertText(
-                            objectID=item[0],
-                            text=slideVersesList[i - slideIndex],
+                            objectID=objIDMappingList[i][item[0]],
+                            text=slideVersesList[i],
                             size=int(self.config[propertyName][dataNameHeader + "TextSize"]),
                             bold=self._str2bool(self.config[propertyName][dataNameHeader + "Bolded"]),
                             italic=self._str2bool(self.config[propertyName][dataNameHeader + "Italicized"]),
@@ -421,30 +578,38 @@ class SlideMaker:
                             alignment=self.config[propertyName][dataNameHeader + "Alignment"])
 
                         # Superscript and bold the verse numbers, and set paragraph spacing between the verses
-                        for ssRange in slideSSIndexList[i - slideIndex]:
-                            self.gEditor.setTextSuperScript(item[0], ssRange[1], ssRange[2])
-                            self.gEditor.setBold(item[0], ssRange[1], ssRange[2])
+                        for ssRange in slideSSIndexList[i]:
+                            self.gEditor.setTextSuperScript(objIDMappingList[i][item[0]], ssRange[1], ssRange[2])
+                            self.gEditor.setBold(objIDMappingList[i][item[0]], ssRange[1], ssRange[2])
                             if (ssRange[1] > 0 and ssRange[0] == self.verseMaker.SSType.VerseNumber):  # No need for paragraph spacing in initial line
-                                self.gEditor.setSpaceAbove(item[0], ssRange[1], paragraphSpace)
+                                self.gEditor.setSpaceAbove(objIDMappingList[i][item[0]], ssRange[1], paragraphSpace)
             except Exception:
                 print(f"\tERROR : {traceback.format_exc()}")
-                return False
+                return []
 
             if (False in checkPoint):
                 print(f"\tERROR : {checkPoint.count(True)} out of {len(checkPoint)} text placeholders found.")
-                return False
+                return []
 
-        return self.gEditor.commitSlideChanges()
+        return slideIDList
 
-    def _sermonHeaderSlide(self, title: str, speaker: str, propertyName: str, dataNameHeader: str) -> bool:
+    def _sermonHeaderSlide(self, title: str, speaker: str, propertyName: str, dataNameHeader: str) -> List[str]:
+        slideIndex = int(self.config[propertyName][dataNameHeader + "Index"])
+
+        # Generate create duplicate request
+        objIDMappingList = self._duplicateSlide(1, slideIndex)
+
+        refData = self.gEditor.getSlideTextData(slideIndex)
+        refSlideID = self.gEditor.getSlideID(slideIndex)
+        slideIDList = [objIDMappingList[0][refSlideID]]
+
         checkPoint = [False, False]
         try:
-            data = self.gEditor.getSlideTextData(int(self.config[propertyName][dataNameHeader + "Index"]) + self.slideOffset)
-            for item in data:
+            for item in refData:
                 if '{Title}' in item[1]:
                     checkPoint[0] = True
                     self._insertText(
-                        objectID=item[0],
+                        objectID=objIDMappingList[0][item[0]],
                         text=title.upper(),
                         size=int(self.config[propertyName][dataNameHeader + "TitleTextSize"]),
                         bold=self._str2bool(self.config[propertyName][dataNameHeader + "TitleBolded"]),
@@ -454,7 +619,7 @@ class SlideMaker:
                 elif '{Text}' in item[1]:
                     checkPoint[1] = True
                     self._insertText(
-                        objectID=item[0],
+                        objectID=objIDMappingList[0][item[0]],
                         text=speaker.title(),
                         size=int(self.config[propertyName][dataNameHeader + "SpeakerTextSize"]),
                         bold=self._str2bool(self.config[propertyName][dataNameHeader + "SpeakerBolded"]),
@@ -463,24 +628,32 @@ class SlideMaker:
                         alignment=self.config[propertyName][dataNameHeader + "SpeakerAlignment"])
         except Exception:
             print(f"\tERROR : {traceback.format_exc()}")
-            return False
+            return []
 
         if (False in checkPoint):
             print(f"\tERROR : {checkPoint.count(True)} out of {len(checkPoint)} text placeholders found.")
-            return False
+            return []
 
-        return self.gEditor.commitSlideChanges()
+        return slideIDList
 
-    def _headerOnlySlide(self, title: str, propertyName: str, dataNameHeader: str, nextWeek: bool = False) -> bool:
+    def _headerOnlySlide(self, title: str, propertyName: str, dataNameHeader: str, nextWeek: bool = False) -> List[str]:
         nextWeekString = "NextWeek" if nextWeek else ""
+        slideIndex = int(self.config[propertyName][dataNameHeader + nextWeekString + "Index"])
+
+        # Generate create duplicate request
+        objIDMappingList = self._duplicateSlide(1, slideIndex)
+
+        refData = self.gEditor.getSlideTextData(slideIndex)
+        refSlideID = self.gEditor.getSlideID(slideIndex)
+        slideIDList = [objIDMappingList[0][refSlideID]]
+
         checkPoint = [False]
         try:
-            data = self.gEditor.getSlideTextData(int(self.config[propertyName][dataNameHeader + nextWeekString + "Index"]) + self.slideOffset)
-            for item in data:
+            for item in refData:
                 if '{Title}' in item[1]:
                     checkPoint[0] = True
                     self._insertText(
-                        objectID=item[0],
+                        objectID=objIDMappingList[0][item[0]],
                         text=title.upper(),
                         size=int(self.config[propertyName][dataNameHeader + nextWeekString + "TitleTextSize"]),
                         bold=self._str2bool(self.config[propertyName][dataNameHeader + "TitleBolded"]),
@@ -489,32 +662,37 @@ class SlideMaker:
                         alignment=self.config[propertyName][dataNameHeader + "TitleAlignment"])
         except Exception:
             print(f"\tERROR : {traceback.format_exc()}")
-            return False
+            return []
 
         if (False in checkPoint):
             print(f"\tERROR : {checkPoint.count(True)} out of {len(checkPoint)} text placeholders found.")
-            return False
+            return []
 
-        return self.gEditor.commitSlideChanges()
+        return slideIDList
 
-    def _textMultiSlide(self, title: str, textContentList: List[str], propertyName: str, dataNameHeader: str) -> bool:
+    def _textMultiSlide(self, title: str, textContentList: List[str], propertyName: str, dataNameHeader: str) -> List[str]:
         # For announcement slides
-        slideIndex = int(self.config[propertyName][dataNameHeader + "Index"]) + self.slideOffset
+        slideIndex = int(self.config[propertyName][dataNameHeader + "Index"])
 
-        # Generate create duplicate request and commit it
-        if not self._duplicateSlide(len(textContentList) - 1, slideIndex):
-            return False
+        # Generate create duplicate request
+        objIDMappingList = self._duplicateSlide(len(textContentList), slideIndex)
+
+        refData = self.gEditor.getSlideTextData(slideIndex)
+        refSlideID = self.gEditor.getSlideID(slideIndex)
+        slideIDList = []
 
         # Insert title and verses data
-        for i in range(slideIndex, slideIndex + len(textContentList)):
+        for i in range(len(textContentList)):
+            # Save slide ID
+            slideIDList.append(objIDMappingList[i][refSlideID])
+
             checkPoint = [False, False]
             try:
-                data = self.gEditor.getSlideTextData(i)
-                for item in data:
+                for item in refData:
                     if '{Title}' in item[1]:
                         checkPoint[0] = True
                         self._insertText(
-                            objectID=item[0],
+                            objectID=objIDMappingList[i][item[0]],
                             text=title.upper(),
                             size=int(self.config[propertyName][dataNameHeader + "TitleTextSize"]),
                             bold=self._str2bool(self.config[propertyName][dataNameHeader + "TitleBolded"]),
@@ -524,8 +702,8 @@ class SlideMaker:
                     elif '{Text}' in item[1]:
                         checkPoint[1] = True
                         self._insertText(
-                            objectID=item[0],
-                            text=textContentList[i - slideIndex],
+                            objectID=objIDMappingList[i][item[0]],
+                            text=textContentList[i],
                             size=int(self.config[propertyName][dataNameHeader + "TextSize"]),
                             bold=self._str2bool(self.config[propertyName][dataNameHeader + "Bolded"]),
                             italic=self._str2bool(self.config[propertyName][dataNameHeader + "Italicized"]),
@@ -533,17 +711,17 @@ class SlideMaker:
                             alignment=self.config[propertyName][dataNameHeader + "Alignment"])
             except Exception:
                 print(f"\tERROR : {traceback.format_exc()}")
-                return False
+                return []
 
             if (False in checkPoint):
                 print(f"\tERROR : {checkPoint.count(True)} out of {len(checkPoint)} text placeholders found.")
-                return False
+                return []
 
-        return self.gEditor.commitSlideChanges()
+        return slideIDList
 
-    def _numListMultiSlide(self, title: str, contentList: List[str], propertyName: str, dataNameHeader: str) -> bool:
+    def _numListMultiSlide(self, title: str, contentList: List[str], propertyName: str, dataNameHeader: str) -> List[str]:
         # For supplication slides
-        slideIndex = int(self.config[propertyName][dataNameHeader + "Index"]) + self.slideOffset
+        slideIndex = int(self.config[propertyName][dataNameHeader + "Index"])
         paragraphSpace = int(self.config[propertyName][dataNameHeader + "ParagraphSpace"])
 
         # Get slide separated list
@@ -552,20 +730,25 @@ class SlideMaker:
                                                                                        maxLineLength=int(self.config[propertyName][dataNameHeader + "TextMaxLineLength"]),
                                                                                        maxLinesPerSlide=int(self.config[propertyName][dataNameHeader + "TextMaxLines"]))
 
-        # Generate create duplicate request and commit it
-        if not self._duplicateSlide(len(slideContentList) - 1, slideIndex):
-            return False
+        # Generate create duplicate request
+        objIDMappingList = self._duplicateSlide(len(slideContentList), slideIndex)
+
+        refData = self.gEditor.getSlideTextData(slideIndex)
+        refSlideID = self.gEditor.getSlideID(slideIndex)
+        slideIDList = []
 
         # Insert title and verses data
-        for i in range(slideIndex, slideIndex + len(slideContentList)):
+        for i in range(len(slideContentList)):
+            # Save slide ID
+            slideIDList.append(objIDMappingList[i][refSlideID])
+
             checkPoint = [False, False]
             try:
-                data = self.gEditor.getSlideTextData(i)
-                for item in data:
+                for item in refData:
                     if '{Title}' in item[1]:
                         checkPoint[0] = True
                         self._insertText(
-                            objectID=item[0],
+                            objectID=objIDMappingList[i][item[0]],
                             text=title.upper(),
                             size=int(self.config[propertyName][dataNameHeader + "TitleTextSize"]),
                             bold=self._str2bool(self.config[propertyName][dataNameHeader + "TitleBolded"]),
@@ -575,8 +758,8 @@ class SlideMaker:
                     elif '{Text}' in item[1]:
                         checkPoint[1] = True
                         self._insertText(
-                            objectID=item[0],
-                            text=slideContentList[i - slideIndex],
+                            objectID=objIDMappingList[i][item[0]],
+                            text=slideContentList[i],
                             size=int(self.config[propertyName][dataNameHeader + "TextSize"]),
                             bold=self._str2bool(self.config[propertyName][dataNameHeader + "Bolded"]),
                             italic=self._str2bool(self.config[propertyName][dataNameHeader + "Italicized"]),
@@ -584,19 +767,33 @@ class SlideMaker:
                             alignment=self.config[propertyName][dataNameHeader + "Alignment"])
 
                         # Add bullets
-                        for lineStartIndex in listStartIndex[i - slideIndex]:
+                        for lineStartIndex in listStartIndex[i]:
                             if lineStartIndex > 0:  # No need for paragraph spacing in initial line
-                                self.gEditor.setSpaceAbove(item[0], lineStartIndex, paragraphSpace)
+                                self.gEditor.setSpaceAbove(objIDMappingList[i][item[0]], lineStartIndex, paragraphSpace)
 
             except Exception:
                 print(f"\tERROR : {traceback.format_exc()}")
-                return False
+                return []
 
             if (False in checkPoint):
                 print(f"\tERROR : {checkPoint.count(True)} out of {len(checkPoint)} text placeholders found.")
-                return False
+                return []
 
-        return self.gEditor.commitSlideChanges()
+        return slideIDList
+
+    def _staticSlides(self, propertyName: str, dataNameHeader: str) -> List[str]:
+        slideIndexList = [int(index) for index in self.config[propertyName][dataNameHeader + "Index"].split(", ")]
+
+        slideIDList = []
+        for slideIndex in slideIndexList:
+            # Generate create duplicate request
+            objIDMappingList = self._duplicateSlide(1, slideIndex)
+            refSlideID = self.gEditor.getSlideID(slideIndex)
+
+            # Save slide ID
+            slideIDList.append(objIDMappingList[0][refSlideID])
+
+        return slideIDList
 
     # ======================================================================================================
     # ============================================ TOOLS ===================================================
@@ -610,8 +807,6 @@ class SlideMaker:
         if (not self.gEditor.commitSlideChanges()):
             return False
 
-        self.slideOffset -= len(slideIndexList)
-
         return True
 
     def _str2bool(self, boolString: str) -> bool:
@@ -620,24 +815,23 @@ class SlideMaker:
     def _openSlideInBrowser(self) -> None:
         self.gEditor.openSlideInBrowser()
 
-    def _insertText(self, objectID: str, text: str, size: int, bold: bool, italic: bool, underlined: bool, alignment: str, linespacing: int = -1) -> None:
+    def _insertText(self, objectID: str, text: str, size: int, bold: bool, italic: bool, underlined: bool, alignment: str, linespacing: int = -1, rgbColor: Tuple[float, float, float] = (1.0, 1.0, 1.0)) -> None:
         self.gEditor.setText(objectID, text)
         self.gEditor.setTextStyle(objectID, bold, italic, underlined, size)
         self.gEditor.setParagraphStyle(objectID, self.lineSpacing if linespacing < 0 else linespacing, alignment)
+        self.gEditor.setTextColor(objectID, rgbColor)
 
-    def _duplicateSlide(self, dupCount: int, slideIndex: int) -> bool:
-        # Generate extra duplicate slides (total number of slides = [dupCount + 1]) and commit it
-        sourceSlideID = self.gEditor.getSlideID(slideIndex)
-        for i in range(dupCount):  # Recall that the original source slide remains
-            self.gEditor.duplicateSlide(
-                sourceSlideID, sourceSlideID + '__' + str(i))
-        if (not self.gEditor.commitSlideChanges()):
-            return False
+    def _duplicateSlide(self, dupCount: int, slideIndex: int) -> List[Dict[str, str]]:
+        # Generate extra duplicate slides, return object ID mapping from original to duplicated
+        objIDMappingList: List[Dict[str, str]] = []
+        for i in range(dupCount):
+            objIDMappingList.insert(0, self.gEditor.duplicateSlide(slideIndex))
 
-        # Update offset
-        self.slideOffset += dupCount
+        return objIDMappingList
 
-        return True
+# ==============================================================================================
+# ======================================= APPLICATION RUNNER ===================================
+# ==============================================================================================
 
 
 if __name__ == '__main__':
@@ -648,6 +842,10 @@ if __name__ == '__main__':
     print("====================================================================\n")
 
     mode = ""
+
+    # Set seed so RNG is consist between instances
+    seed = int(time.time())
+
     while (mode != "q"):
         pptType = SlideMaker.PPTMode.Null
         mode = input("Input: ")
@@ -666,33 +864,12 @@ if __name__ == '__main__':
             start = time.time()
 
             print("\nINITIALIZING...")
-            sm: SlideMaker = SlideMaker()
 
+            sm: SlideMaker = SlideMaker(seed)
             sm.setType(pptType)
+            sm.createSlide()
 
-            strType = pptType.name
-
-            print(f"CREATING {strType.upper()} SLIDES...")
-            print("  sundayServiceSlide() : ".ljust(45), sm.sundayServiceSlide().name)
-            print("  monthlyScriptureSlide() : ".ljust(45), sm.monthlyScriptureSlide().name)
-            print("  announcementSlide() : ".ljust(45), sm.announcementSlide().name)
-            print("  bibleVerseMemorizationSlide() : ".ljust(45), sm.bibleVerseMemorizationSlide().name)
-            print("  catechismSlide() : ".ljust(45), sm.catechismSlide().name)
-            print("  bibleVerseMemorizationNextWeekSlide() : ".ljust(45), sm.bibleVerseMemorizationSlide(True).name)
-            print("  catechismNextWeekSlide() : ".ljust(45), sm.catechismSlide(True).name)
-            print("  supplicationSlide() : ".ljust(45), sm.supplicationSlide().name)
-            print("  worshipSlide() : ".ljust(45), sm.worshipSlide().name)
-            print("  callToWorshipSlide() : ".ljust(45), sm.callToWorshipSlide().name)
-            print("  hymnSlides(1) : ".ljust(45), sm.hymnSlides(1).name)
-            print("  prayerOfConfessionSlide() : ".ljust(45), sm.prayerOfConfessionSlide().name)
-            print("  hymnSlides(2) : ".ljust(45), sm.hymnSlides(2).name)
-            print("  holyCommunionSlide() : ".ljust(45), sm.holyCommunionSlide().name)
-            print("  sermonHeaderSlide() : ".ljust(45), sm.sermonHeaderSlide().name)
-            print("  sermonVerseSlide() : ".ljust(45), sm.sermonVerseSlide().name)
-            print("  hymnSlides(3) : ".ljust(45), sm.hymnSlides(3).name)
-            print("  hymnSlides(4) : ".ljust(45), sm.hymnSlides(4).name)
-
-            print(f"OPENING {strType.upper()} SLIDES...")
+            print(f"OPENING {pptType.name.upper()} SLIDES...")
             sm._openSlideInBrowser()
 
             print(f"\nTask completed in {(time.time() - start):.2f} seconds.\n")

@@ -6,8 +6,10 @@ import datetime
 import webbrowser
 import googleapiclient
 import pytz
+import random
+import string
 
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 from datetime import timedelta
 from googleapiclient.http import MediaIoBaseDownload
 from googleapiclient.discovery import build
@@ -22,6 +24,7 @@ from Logging import Logging
 '''
 
 Tools to manipulate/retrieve Google Slide elements and Google Drive files.
+Also handles updating local database and property .ini files.
 
 '''
 
@@ -38,12 +41,8 @@ class GoogleAPITools:
                       'https://www.googleapis.com/auth/spreadsheets',
                       'https://www.googleapis.com/auth/drive']
 
-        # The ID of the source slide.
-        if not os.path.exists("Data/" + type + "SlideProperties.ini"):
-            raise IOError(f"ERROR : {type}SlideProperties.ini config file cannot be found.")
-        config = configparser.ConfigParser()
-        config.read("Data/" + type + "SlideProperties.ini")
-        self.sourceSlideID = config["SLIDE_PROPERTIES"][type + "SourceSlideID"]
+        # Get access to the slide, sheet, and drive
+        [self.slideService, self.sheetService, self.driveService] = self.getAPIServices()
 
         # Retrieve global configuration
         if not os.path.exists("Data/GlobalProperties.ini"):
@@ -51,8 +50,15 @@ class GoogleAPITools:
         self.globalConfig = configparser.ConfigParser()
         self.globalConfig.read("Data/GlobalProperties.ini")
 
-        # Get access to the slide, sheet, and drive
-        [self.slideService, self.sheetService, self.driveService] = self.getAPIServices()
+        # Update local hymn database and slide properties from Google Drive
+        self.updateData()
+
+        # The ID of the source slide.
+        if not os.path.exists("Data/" + type + "SlideProperties.ini"):
+            raise IOError(f"ERROR : {type}SlideProperties.ini config file cannot be found.")
+        config = configparser.ConfigParser()
+        config.read("Data/" + type + "SlideProperties.ini")
+        self.sourceSlideID = config["SLIDE_PROPERTIES"][type + "SourceSlideID"]
 
         # Get rid of previously made slides
         self.removePreviousSlides()
@@ -67,8 +73,8 @@ class GoogleAPITools:
         self.presentation = self.slideService.presentations().get(
             presentationId=self.newSlideID).execute()
 
-        # Update local hymn database
-        self.updateHymnDataBase()
+        # For creating unique IDs in duplicateSlide()
+        self.dupIDCounter = 0
 
     # ==========================================================================================
     # ======================================= API TOOLS ========================================
@@ -132,35 +138,51 @@ class GoogleAPITools:
         except:
             return ""
 
-    def getSlideTextData(self, index: int) -> List[List[str]]:
+    def getSlideTextData(self, slideIndex: int) -> List[List[str]]:
         # Returns the objectID and text from the textboxes in the indexed slide
         textObjects = []
-        for element in self.presentation.get('slides')[index]['pageElements']:
+        for element in self.presentation.get('slides')[slideIndex]['pageElements']:
             textObject = [element.get('objectId'), self.getText(element)]
             if textObject[1] != "":
                 textObjects.append(textObject)
         return textObjects
 
-    def getSlideID(self, index: int) -> str:
-        return self.presentation.get('slides')[index]['objectId']
+    def getSlideID(self, slideIndex: int) -> str:
+        return self.presentation.get('slides')[slideIndex]['objectId']
+
+    def getPresentationLength(self) -> int:
+        return len(self.presentation.get('slides'))
 
     # ==========================================================================================
     # =================================== SLIDE MODIFIERS ======================================
     # ==========================================================================================
 
-    def duplicateSlide(self, slideObjectID: str, newSlideObjectID: str) -> None:
-        # Duplicates a slide, the duplicated slide is placed right after the source. "newSlideObjectID" must be unique.
-        self.requests.append({"duplicateObject": {"objectId": slideObjectID,
-                                                  "objectIds": {slideObjectID: newSlideObjectID}}})
+    def duplicateSlide(self, slideIndex: int) -> Dict[str, str]:
+        # Duplicates a slide, the duplicated slide is placed right after the source.
+        # The object ID mapping from the original to the duplicated are returned.
+
+        sourceSlideID = self.getSlideID(slideIndex)
+        objIDList = [sourceSlideID] + [item[0] for item in self.getSlideTextData(slideIndex)]
+
+        newSlideObjectIDMapping = {}
+        for i, objID in enumerate(objIDList):
+            newSlideObjectIDMapping[objID] = f'{objID}__{self.dupIDCounter}_{i}'
+            self.dupIDCounter += 1
+
+        self.requests.append({"duplicateObject": {"objectId": sourceSlideID,
+                                                  "objectIds": newSlideObjectIDMapping}})
+
+        return newSlideObjectIDMapping
 
     def deleteSlide(self, slideObjectID: str) -> None:
         # Delete the slide with the "slideObjectID"
         self.requests.append({"deleteObject": {"objectId": slideObjectID}})
 
     def moveSlideSet(self, slideObjectIDList: list[str], newLocationIndex: int) -> None:
-        # Move set of slides to new location while maintaining relative ordering
-        self.requests.append({"UpdateSlidesPositionRequest ": {"slideObjectIds": slideObjectIDList,
-                                                               "insertionIndex": newLocationIndex}})
+        # Move set of slides to new location while maintaining relative ordering.
+        # SlideID must be in presentation order with no duplicates.
+        self.requests.append({"updateSlidesPosition": {"slideObjectIds": slideObjectIDList,
+                                                       "insertionIndex": newLocationIndex}})
 
     # ==========================================================================================
     # ================================= SLIDE FORMAT SETTERS ===================================
@@ -170,6 +192,17 @@ class GoogleAPITools:
         # Delete existing text and insert new
         self.requests.append({"deleteText": {"objectId": objectID}})
         self.requests.append({"insertText": {"objectId": objectID, "text": newText}})
+
+    def setTextColor(self, objectID: str, rgbColor: Tuple[float, float, float]) -> None:
+        # Delete existing text and insert new
+        r, g, b = rgbColor
+        self.requests.append({"updateTextStyle": {"objectId": objectID,
+                                                  "textRange": {"type": "ALL"},
+                                                  "style": {'foregroundColor': {"opaqueColor": {"rgbColor": {
+                                                      "blue": r,
+                                                      "green": g,
+                                                      "red": b}}}},
+                                                  "fields": "foregroundColor"}})
 
     def setBold(self, objectID: str, startIndex: int, endIndex: int) -> None:
         # Set bold to a select range of text
@@ -232,8 +265,8 @@ class GoogleAPITools:
         try:
             response = self.sheetService.spreadsheets().values().get(spreadsheetId=sheetID, range=dataRange).execute()
 
-            # Flatten the nested list
-            return [val for sublist in response["values"] for val in sublist]
+            # Flatten the nested list, remove new line and extra spaces
+            return [' '.join(val.split()) for sublist in response["values"] for val in sublist]
         except errors.HttpError as error:
             print(f"\tERROR : An error occurred on retrieving announcement data; {error}")
 
@@ -247,8 +280,8 @@ class GoogleAPITools:
         try:
             response = self.sheetService.spreadsheets().values().get(spreadsheetId=sheetID, range=dataRange).execute()
 
-            # Flatten the nested list
-            return [val for sublist in response["values"] for val in sublist]
+            # Flatten the nested list, remove new line and extra spaces
+            return [' '.join(val.split()) for sublist in response["values"] for val in sublist]
         except errors.HttpError as error:
             print(f"\tERROR : An error occurred on retrieving supplication data; {error}")
 
@@ -336,44 +369,41 @@ class GoogleAPITools:
     # =================================== LOCAL CHANGE TOOLS ===================================
     # ==========================================================================================
 
-    def updateHymnDataBase(self) -> None:
-        # Lookup latest HymnDatabase file on Google Drive, replace local copy if local copy is older
-        try:
-            fileID = self.globalConfig["HYMN_DATABASE_PROPERTIES"]["HymnDataBaseFileID"]
-            filedDetails = self.driveService.files().get(fileId=fileID,
-                                                         fields="modifiedTime").execute()
+    def updateData(self) -> None:
+        # Lookup latest HymnDatabase file and property files on Google Drive, replace local copy if local copy is older
+        dataTypeList = ["HymnDatabase", "ProjectedSlideProperties", "RegularSlideProperties", "StreamSlideProperties"]
+        fileNameList = ["HymnDatabase.db", "ProjectedSlideProperties.ini", "RegularSlideProperties.ini", "StreamSlideProperties.ini"]
+        for i, dataType in enumerate(dataTypeList):
+            try:
+                fileID = self.globalConfig["GOOGLE_DRIVE_DATA"][dataType + "FileID"]
+                filedDetails = self.driveService.files().get(fileId=fileID,
+                                                             fields="modifiedTime").execute()
 
-            # Get modified date of DataBase.db file and compare
-            localModifiedDate = pytz.utc.localize(datetime.datetime.min)
-            driveModifiedDate = pytz.utc.localize(datetime.datetime.strptime(filedDetails['modifiedTime'], '%Y-%m-%dT%H:%M:%S.%fZ'))
+                # Get modified date of DataBase.db file and compare
+                localModifiedDate = pytz.utc.localize(datetime.datetime.min)
+                driveModifiedDate = pytz.utc.localize(datetime.datetime.strptime(filedDetails['modifiedTime'], '%Y-%m-%dT%H:%M:%S.%fZ'))
 
-            if os.path.exists("Data/HymnDatabase.db"):
-                localModifiedDate = datetime.datetime.fromtimestamp(os.path.getmtime("Data/HymnDatabase.db"), datetime.timezone.utc)
+                if os.path.exists("Data/" + fileNameList[i]):
+                    localModifiedDate = datetime.datetime.fromtimestamp(os.path.getmtime("Data/" + fileNameList[i]), datetime.timezone.utc)
 
-            # Overwrite local file
-            if localModifiedDate < driveModifiedDate:
-                Logging.writeLog(Logging.LogType.Info, f"GoogleAPITools - Updating local hymn database from [{localModifiedDate}] to [{driveModifiedDate}]")
-                request = self.driveService.files().get_media(fileId=fileID)
-                with open("Data/HymnDatabase.db", "wb") as f:
-                    downloader = MediaIoBaseDownload(f, request)
-                    done = False
-                    while done is False:
-                        status, done = downloader.next_chunk()
-                        print("UPDATING HYMN DATABASE : %d%%" % int(status.progress() * 100))
-        except errors.HttpError as error:
-            print(f"ERROR : An error occurred on updating local hymn database; {error}")
+                # Overwrite local file
+                if localModifiedDate < driveModifiedDate:
+                    Logging.writeLog(Logging.LogType.Info, f"GoogleAPITools - Updating {dataType} from [{localModifiedDate}] to [{driveModifiedDate}]")
+                    request = self.driveService.files().get_media(fileId=fileID)
+                    with open("Data/" + fileNameList[i], "wb") as f:
+                        downloader = MediaIoBaseDownload(f, request)
+                        done = False
+                        while done is False:
+                            status, done = downloader.next_chunk()
+                            print(f"UPDATING {dataType.upper()} : %d%%" % int(status.progress() * 100))
+            except errors.HttpError as error:
+                print(f"ERROR : An error occurred on updating {dataType.upper()}; {error}")
+
+# ==============================================================================================
+# ============================================ TESTER ==========================================
+# ==============================================================================================
 
 
 if __name__ == '__main__':
-    peS = GoogleAPITools('Stream')
-
-    anns = peS.getAnnouncements()
-    sups = peS.getSupplications()
-
-    for ann in anns:
-        print(ann)
-        print("---------------------")
-
-    for sup in sups:
-        print(sup)
-        print("---------------------")
+    gEditor = GoogleAPITools('Stream')
+    print(gEditor.getSlideTextData(15))
