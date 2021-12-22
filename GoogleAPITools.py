@@ -6,8 +6,6 @@ import datetime
 import webbrowser
 import googleapiclient
 import pytz
-import random
-import string
 
 from typing import Dict, List, Tuple
 from datetime import timedelta
@@ -153,6 +151,14 @@ class GoogleAPITools:
     def getPresentationLength(self) -> int:
         return len(self.presentation.get('slides'))
 
+    def getTableID(self, slideIndex: int) -> List[str]:
+        tableIDList = []
+        for elem in self.presentation.get('slides')[slideIndex]['pageElements']:
+            if "table" in elem:
+                tableIDList.append(elem["objectId"])
+
+        return tableIDList
+
     # ==========================================================================================
     # =================================== SLIDE MODIFIERS ======================================
     # ==========================================================================================
@@ -160,7 +166,6 @@ class GoogleAPITools:
     def duplicateSlide(self, slideIndex: int) -> Dict[str, str]:
         # Duplicates a slide, the duplicated slide is placed right after the source.
         # The object ID mapping from the original to the duplicated are returned.
-
         sourceSlideID = self.getSlideID(slideIndex)
         objIDList = [sourceSlideID] + [item[0] for item in self.getSlideTextData(slideIndex)]
 
@@ -193,10 +198,32 @@ class GoogleAPITools:
         self.requests.append({"deleteText": {"objectId": objectID}})
         self.requests.append({"insertText": {"objectId": objectID, "text": newText}})
 
+    def setTextInTable(self, tableID: str, newText: str, rowIndex: int, colIndex: int) -> None:
+        # For a specific table cell, delete existing text and insert new
+        self.requests.append({"deleteText": {"objectId": tableID,
+                                             "cellLocation": {"rowIndex": rowIndex, "columnIndex": colIndex},
+                                             "textRange": {"type": "ALL"}}})
+        self.requests.append({"insertText": {"objectId": tableID,
+                                             "cellLocation": {"rowIndex": rowIndex, "columnIndex": colIndex},
+                                             "text": newText,
+                                             "insertionIndex": 0}})
+
     def setTextColor(self, objectID: str, rgbColor: Tuple[float, float, float]) -> None:
         # Delete existing text and insert new
         r, g, b = rgbColor
         self.requests.append({"updateTextStyle": {"objectId": objectID,
+                                                  "textRange": {"type": "ALL"},
+                                                  "style": {'foregroundColor': {"opaqueColor": {"rgbColor": {
+                                                      "blue": r,
+                                                      "green": g,
+                                                      "red": b}}}},
+                                                  "fields": "foregroundColor"}})
+
+    def setTextColorInTable(self, tableID: str, rgbColor: Tuple[float, float, float], rowIndex: int, colIndex: int) -> None:
+        # Delete existing text and insert new
+        r, g, b = rgbColor
+        self.requests.append({"updateTextStyle": {"objectId": tableID,
+                                                  "cellLocation": {"rowIndex": rowIndex, "columnIndex": colIndex},
                                                   "textRange": {"type": "ALL"},
                                                   "style": {'foregroundColor': {"opaqueColor": {"rgbColor": {
                                                       "blue": r,
@@ -217,15 +244,37 @@ class GoogleAPITools:
                                                   "style": {"bold": bold, "italic": italic, "underline": underline, "fontSize": {"magnitude": size, "unit": "PT"}},
                                                   "fields": "bold, italic, underline, fontSize"}})
 
+    def setTextStyleInTable(self, tableID: str, bold: bool, italic: bool, underline: bool, size: int, rowIndex: int, colIndex: int) -> None:
+        # For a specific table cell, sets bold, italic, or underline to "True" or "False" to enable or disable; also the entire cell's font size.
+        self.requests.append({"updateTextStyle": {"objectId": tableID,
+                                                  "cellLocation": {"rowIndex": rowIndex, "columnIndex": colIndex},
+                                                  "style": {"bold": bold, "italic": italic, "underline": underline, "fontSize": {"magnitude": size, "unit": "PT"}},
+                                                  "fields": "bold, italic, underline, fontSize"}})
+
     def setParagraphStyle(self, objectID: str, spacing: int, alignment: str) -> None:
         # Sets the space between each line, default is 100.0; alignment options includes "START" (aka 'left'), "CENTER", "END" (aka 'right'), and "JUSTIFIED"
         self.requests.append({"updateParagraphStyle": {"objectId": objectID,
                                                        "style": {"lineSpacing": spacing, "alignment": alignment},
                                                        "fields": "lineSpacing, alignment"}})
 
+    def setParagraphStyleInTable(self, tableID: str, spacing: int, alignment: str,  rowIndex: int, colIndex: int) -> None:
+        # For a specific table cell, sets the space between each line, default is 100.0; alignment options includes "START" (aka 'left'), "CENTER", "END" (aka 'right'), and "JUSTIFIED"
+        self.requests.append({"updateParagraphStyle": {"objectId": tableID,
+                                                       "cellLocation": {"rowIndex": rowIndex, "columnIndex": colIndex},
+                                                       "style": {"lineSpacing": spacing, "alignment": alignment},
+                                                       "fields": "lineSpacing, alignment"}})
+
     def setTextSuperScript(self, objectID: str, startIndex: int, endIndex: int) -> None:
         # Formats text indexed from 'startIndex' to 'endIndex' to superscript
         self.requests.append({"updateTextStyle": {"objectId": objectID,
+                                                  "textRange": {"type": "FIXED_RANGE", "startIndex": startIndex, "endIndex": endIndex},
+                                                  "style":  {"baselineOffset": "SUPERSCRIPT"},
+                                                  "fields": "baselineOffset"}})
+
+    def setTextSuperScriptInTable(self, tableID: str, startIndex: int, endIndex: int, rowIndex: int, colIndex: int) -> None:
+        # For a specific table cell, formats text indexed from 'startIndex' to 'endIndex' to superscript
+        self.requests.append({"updateTextStyle": {"objectId": tableID,
+                                                  "cellLocation": {"rowIndex": rowIndex, "columnIndex": colIndex},
                                                   "textRange": {"type": "FIXED_RANGE", "startIndex": startIndex, "endIndex": endIndex},
                                                   "style":  {"baselineOffset": "SUPERSCRIPT"},
                                                   "fields": "baselineOffset"}})
@@ -291,15 +340,19 @@ class GoogleAPITools:
     # ====================================== MISC GETTERS ======================================
     # ==========================================================================================
 
-    def getNextSundayDate(self) -> datetime.date:
+    def getNextSundayDate(self, nextNextSundayDate: bool = False) -> datetime.date:
         # Get datetime variable with the date of next Sunday
         dt = datetime.date.today()
-        dt += timedelta(days=(6 - dt.weekday()))
+
+        if nextNextSundayDate:
+            dt += timedelta(days=(13 - dt.weekday()))
+        else:
+            dt += timedelta(days=(6 - dt.weekday()))
         return dt
 
-    def getFormattedNextSundayDate(self, type: DateFormatMode) -> Tuple[str, int]:
+    def getFormattedNextSundayDate(self, type: DateFormatMode, nextNextSundayDate: bool = False) -> Tuple[str, int]:
         # Get formatted string with the date of next Sunday
-        dt = self.getNextSundayDate()
+        dt = self.getNextSundayDate(nextNextSundayDate)
 
         month = dt.strftime('%B') if type == self.DateFormatMode.Full else dt.strftime('%b')
         day = dt.strftime('%d')
@@ -406,4 +459,3 @@ class GoogleAPITools:
 
 if __name__ == '__main__':
     gEditor = GoogleAPITools('Stream')
-    print(gEditor.getSlideTextData(15))

@@ -83,14 +83,14 @@ class SlideMaker:
         }
 
     def setType(self, pptType: PPTMode) -> None:
-        # Initialize logging
-        Logging.initializeLoggingService()
-
         strType = pptType.name
 
         self.gEditor = GoogleAPITools(strType)
         self.verseMaker = VerseMaker(strType)
         self.hymnMaker = HymnMaker(strType)
+
+        # Initialize logging
+        Logging.initializeLoggingService()
 
         if not os.path.exists("Data/" + strType + "SlideProperties.ini"):
             raise IOError(f"ERROR : {strType}SlideProperties.ini config file cannot be found.")
@@ -296,7 +296,7 @@ class SlideMaker:
 
         # Iterate and generate the slides by each unique source
         result = True
-        slideIDList = []
+        slideIDList: List[str] = []
         for i in range(len(sourceList) - 1, -1, -1):
             slideIDListSub = self._scriptureMultiSlide(sourceList[i].strip(), maxLineLength, maxLinesPerSlide, "SERMON_VERSE_PROPERTIES", "SermonVerse")
 
@@ -336,7 +336,30 @@ class SlideMaker:
         return (self.ModuleStatus.Done, slideIDList)
 
     def nextWeekScheduleSlide(self) -> Tuple[ModuleStatus, List[str]]:
-        slideIDList = self._staticSlides("MISC_PROPERTIES", "NextWeekSchedule")
+        propertyName = "NEXT_WEEK_SCHEDULE_PROPERTIES"
+        dataNameHeader = "NextWeekSchedule"
+
+        slideIndex = int(self.config[propertyName][dataNameHeader + "Index"])
+        tableIDList = self.gEditor.getTableID(slideIndex)
+
+        if len(tableIDList) != 1:
+            raise AssertionError(f"\tERROR : Unusual Next Week's Schedule Slide detected with [{len(tableIDList)}] tables")
+
+        # Update date cell
+        (dateString, cordinalIndex) = self.gEditor.getFormattedNextSundayDate(self.gEditor.DateFormatMode.Full, True)
+
+        self._insertTextInTable(tableID=tableIDList[0],
+                                text=dateString[:-5] + "," + dateString[-5:],
+                                size=int(self.config["NEXT_WEEK_SCHEDULE_PROPERTIES"][dataNameHeader + "DateTextSize"]),
+                                bold=self._str2bool(self.config[propertyName][dataNameHeader + "DateBolded"]),
+                                italic=self._str2bool(self.config[propertyName][dataNameHeader + "DateItalicized"]),
+                                underlined=self._str2bool(self.config[propertyName][dataNameHeader + "DateUnderlined"]),
+                                alignment=self.config[propertyName][dataNameHeader + "DateAlignment"],
+                                rowIndex=0,
+                                colIndex=1)
+        self.gEditor.setTextSuperScriptInTable(tableIDList[0], cordinalIndex, cordinalIndex + 2, 0, 1)
+
+        slideIDList = self._staticSlides(propertyName, dataNameHeader)
         return (self.ModuleStatus.Done, slideIDList)
 
     # ======================================================================================================
@@ -815,11 +838,19 @@ class SlideMaker:
     def _openSlideInBrowser(self) -> None:
         self.gEditor.openSlideInBrowser()
 
-    def _insertText(self, objectID: str, text: str, size: int, bold: bool, italic: bool, underlined: bool, alignment: str, linespacing: int = -1, rgbColor: Tuple[float, float, float] = (1.0, 1.0, 1.0)) -> None:
+    def _insertText(self, objectID: str, text: str, size: int, bold: bool, italic: bool, underlined: bool, alignment: str,
+                    linespacing: int = -1, rgbColor: Tuple[float, float, float] = (1.0, 1.0, 1.0)) -> None:
         self.gEditor.setText(objectID, text)
         self.gEditor.setTextStyle(objectID, bold, italic, underlined, size)
         self.gEditor.setParagraphStyle(objectID, self.lineSpacing if linespacing < 0 else linespacing, alignment)
         self.gEditor.setTextColor(objectID, rgbColor)
+
+    def _insertTextInTable(self, tableID: str, text: str, size: int, bold: bool, italic: bool, underlined: bool, alignment: str,
+                           rowIndex: int, colIndex: int, linespacing: int = -1, rgbColor: Tuple[float, float, float] = (1.0, 1.0, 1.0)) -> None:
+        self.gEditor.setTextInTable(tableID, text, rowIndex, colIndex)
+        self.gEditor.setTextStyleInTable(tableID, bold, italic, underlined, size, rowIndex, colIndex)
+        self.gEditor.setParagraphStyleInTable(tableID, self.lineSpacing if linespacing < 0 else linespacing, alignment, rowIndex, colIndex)
+        self.gEditor.setTextColorInTable(tableID, rgbColor, rowIndex, colIndex)
 
     def _duplicateSlide(self, dupCount: int, slideIndex: int) -> List[Dict[str, str]]:
         # Generate extra duplicate slides, return object ID mapping from original to duplicated
