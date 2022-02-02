@@ -44,7 +44,7 @@ class GoogleAPITools:
 
         # Retrieve global configuration
         if not os.path.exists("Data/GlobalProperties.ini"):
-            raise IOError(f"ERROR : GlobalProperties.ini config file cannot be found.")
+            raise IOError("ERROR : GlobalProperties.ini config file cannot be found.")
         self.globalConfig = configparser.ConfigParser()
         self.globalConfig.read("Data/GlobalProperties.ini")
 

@@ -1,6 +1,5 @@
 import sys
 import requests
-import sys
 import sqlite3
 from typing import Union
 from lyrics_extractor import SongLyrics
@@ -122,5 +121,5 @@ if __name__ == '__main__':
         name = ' '.join(sys.argv[2:])
         if name:
             hymn = LookupTools.getHymn(name)
-            print(hymn['title'] + f'\n')
+            print(hymn['title'] + '\n')
             print(hymn['lyrics'])

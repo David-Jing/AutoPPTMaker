@@ -41,7 +41,7 @@ class SlideMaker:
 
         # Access slide input data
         if not os.path.exists("SlideInputs.ini"):
-            raise IOError(f"ERROR : SlideInputs.ini input file cannot be found.")
+            raise IOError("ERROR : SlideInputs.ini input file cannot be found.")
         self.input = configparser.ConfigParser()
         self.input.read("SlideInputs.ini")
 
