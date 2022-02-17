@@ -16,7 +16,7 @@ class Utility:
         Utility.initialized = True
 
         # For finding visual lengths of text strings
-        afm_filename = os.path.join(matplotlib.get_data_path(), 'fonts', 'afm', 'ptmr8a.afm')
+        afm_filename = os.path.join(matplotlib.get_data_path(), "fonts", "afm", "ptmr8a.afm")
         Utility.afm = AFM(open(afm_filename, "rb"))
 
     @staticmethod
@@ -24,7 +24,7 @@ class Utility:
         Utility.initializeUtility()
 
         # A precise measurement to indicate if text will align or will take up multiple lines
-        text = ''.join([i if ord(i) < 128 else ' ' for i in text])  # Replace all non-ascii characters
+        text = "".join([i if ord(i) < 128 else " " for i in text])  # Replace all non-ascii characters
         return int(Utility.afm.string_width_height(text)[0])
 
 # ==============================================================================================
@@ -32,12 +32,12 @@ class Utility:
 # ==============================================================================================
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     inputStr = ""
     while True:
         inputStr = str(input())
 
-        if inputStr == 'q':
+        if inputStr == "q":
             break
 
         print(f"Length = {Utility.getVisualLength(inputStr)}")

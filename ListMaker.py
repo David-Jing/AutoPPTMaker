@@ -126,8 +126,8 @@ class ListMaker:
 # ==============================================================================================
 
 
-if __name__ == '__main__':
-    peS = GoogleAPITools('Stream')
+if __name__ == "__main__":
+    peS = GoogleAPITools("Stream")
     sups = peS.getSupplications()
 
     [slideContentList, listStartIndex] = ListMaker.getFormattedListElementsBySlide(sups, 4, 16000, 12)

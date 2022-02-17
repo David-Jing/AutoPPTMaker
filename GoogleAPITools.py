@@ -19,12 +19,12 @@ from enum import Enum
 
 from Logging import Logging
 
-'''
+"""
 
 Tools to manipulate/retrieve Google Slide elements and Google Drive files.
 Also handles updating local database and property .ini files.
 
-'''
+"""
 
 
 class GoogleAPITools:
@@ -35,9 +35,9 @@ class GoogleAPITools:
 
     def __init__(self, type: str) -> None:
         # If modifying these scopes, delete the file token.json.
-        self.scope = ['https://www.googleapis.com/auth/presentations',
-                      'https://www.googleapis.com/auth/spreadsheets',
-                      'https://www.googleapis.com/auth/drive']
+        self.scope = ["https://www.googleapis.com/auth/presentations",
+                      "https://www.googleapis.com/auth/spreadsheets",
+                      "https://www.googleapis.com/auth/drive"]
 
         # Get access to the slide, sheet, and drive
         [self.slideService, self.sheetService, self.driveService] = self.getAPIServices()
@@ -84,23 +84,28 @@ class GoogleAPITools:
         # The file token.pickle stores the user's access and refresh tokens, and is
         # created automatically when the authorization flow completes for the first
         # time.
-        if os.path.exists('Data/token.pickle'):
-            creds = Credentials.from_authorized_user_file('Data/token.pickle', self.scope)
+        if os.path.exists("Data/token.pickle"):
+            try:
+                creds = Credentials.from_authorized_user_file("Data/token.pickle", self.scope)
+            except Exception as error:
+                print(f"\tINFO : Recreating [token.pickle] file due to authorization issues; {error}")
+                creds = None
+
         # If there are no (valid) credentials available, let the user log in.
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
                 creds.refresh(Request())
             else:
                 flow = InstalledAppFlow.from_client_secrets_file(
-                    'Data/credentials.json', self.scope)
+                    "Data/credentials.json", self.scope)
                 creds = flow.run_local_server(port=0)
             # Save the credentials for the next run
-            with open('Data/token.pickle', 'w') as token:
+            with open("Data/token.pickle", "w") as token:
                 token.write(creds.to_json())
 
-        slideService = build('slides', 'v1', credentials=creds)
-        sheetService = build('sheets', 'v4', credentials=creds)
-        driveService = build('drive', 'v3', credentials=creds)
+        slideService = build("slides", "v1", credentials=creds)
+        sheetService = build("sheets", "v4", credentials=creds)
+        driveService = build("drive", "v3", credentials=creds)
 
         return [slideService, sheetService, driveService]
 
@@ -110,7 +115,7 @@ class GoogleAPITools:
         if len(self.requests) > 0:
             try:
                 self.slideService.presentations().batchUpdate(
-                    presentationId=self.newSlideID, body={'requests': self.requests}).execute()
+                    presentationId=self.newSlideID, body={"requests": self.requests}).execute()
             except errors.HttpError as error:
                 print(f"\tERROR : An error occurred on committing slide changes; {error}")
                 successfulCommit = False
@@ -127,33 +132,33 @@ class GoogleAPITools:
 
     def getTotalSlideNumber(self) -> int:
         # Returns the total number of slides
-        return len(self.presentation.get('slides'))
+        return len(self.presentation.get("slides"))
 
     def getText(self, pageElement: dict) -> str:
         # Returns the first block of formatted text from an element
         try:
-            return pageElement['shape']['text']['textElements'][1]['textRun']['content']
+            return pageElement["shape"]["text"]["textElements"][1]["textRun"]["content"]
         except:
             return ""
 
     def getSlideTextData(self, slideIndex: int) -> List[List[str]]:
         # Returns the objectID and text from the textboxes in the indexed slide
         textObjects = []
-        for element in self.presentation.get('slides')[slideIndex]['pageElements']:
-            textObject = [element.get('objectId'), self.getText(element)]
+        for element in self.presentation.get("slides")[slideIndex]["pageElements"]:
+            textObject = [element.get("objectId"), self.getText(element)]
             if textObject[1] != "":
                 textObjects.append(textObject)
         return textObjects
 
     def getSlideID(self, slideIndex: int) -> str:
-        return self.presentation.get('slides')[slideIndex]['objectId']
+        return self.presentation.get("slides")[slideIndex]["objectId"]
 
     def getPresentationLength(self) -> int:
-        return len(self.presentation.get('slides'))
+        return len(self.presentation.get("slides"))
 
     def getTableID(self, slideIndex: int) -> List[str]:
         tableIDList = []
-        for elem in self.presentation.get('slides')[slideIndex]['pageElements']:
+        for elem in self.presentation.get("slides")[slideIndex]["pageElements"]:
             if "table" in elem:
                 tableIDList.append(elem["objectId"])
 
@@ -171,7 +176,7 @@ class GoogleAPITools:
 
         newSlideObjectIDMapping = {}
         for i, objID in enumerate(objIDList):
-            newSlideObjectIDMapping[objID] = f'{objID}__{self.dupIDCounter}_{i}'
+            newSlideObjectIDMapping[objID] = f"{objID}__{self.dupIDCounter}_{i}"
             self.dupIDCounter += 1
 
         self.requests.append({"duplicateObject": {"objectId": sourceSlideID,
@@ -213,7 +218,7 @@ class GoogleAPITools:
         r, g, b = rgbColor
         self.requests.append({"updateTextStyle": {"objectId": objectID,
                                                   "textRange": {"type": "ALL"},
-                                                  "style": {'foregroundColor': {"opaqueColor": {"rgbColor": {
+                                                  "style": {"foregroundColor": {"opaqueColor": {"rgbColor": {
                                                       "blue": r,
                                                       "green": g,
                                                       "red": b}}}},
@@ -225,7 +230,7 @@ class GoogleAPITools:
         self.requests.append({"updateTextStyle": {"objectId": tableID,
                                                   "cellLocation": {"rowIndex": rowIndex, "columnIndex": colIndex},
                                                   "textRange": {"type": "ALL"},
-                                                  "style": {'foregroundColor': {"opaqueColor": {"rgbColor": {
+                                                  "style": {"foregroundColor": {"opaqueColor": {"rgbColor": {
                                                       "blue": r,
                                                       "green": g,
                                                       "red": b}}}},
@@ -252,27 +257,27 @@ class GoogleAPITools:
                                                   "fields": "bold, italic, underline, fontSize"}})
 
     def setParagraphStyle(self, objectID: str, spacing: int, alignment: str) -> None:
-        # Sets the space between each line, default is 100.0; alignment options includes "START" (aka 'left'), "CENTER", "END" (aka 'right'), and "JUSTIFIED"
+        # Sets the space between each line, default is 100.0; alignment options includes "START" (aka "left"), "CENTER", "END" (aka "right"), and "JUSTIFIED"
         self.requests.append({"updateParagraphStyle": {"objectId": objectID,
                                                        "style": {"lineSpacing": spacing, "alignment": alignment},
                                                        "fields": "lineSpacing, alignment"}})
 
     def setParagraphStyleInTable(self, tableID: str, spacing: int, alignment: str,  rowIndex: int, colIndex: int) -> None:
-        # For a specific table cell, sets the space between each line, default is 100.0; alignment options includes "START" (aka 'left'), "CENTER", "END" (aka 'right'), and "JUSTIFIED"
+        # For a specific table cell, sets the space between each line, default is 100.0; alignment options includes "START" (aka "left"), "CENTER", "END" (aka "right"), and "JUSTIFIED"
         self.requests.append({"updateParagraphStyle": {"objectId": tableID,
                                                        "cellLocation": {"rowIndex": rowIndex, "columnIndex": colIndex},
                                                        "style": {"lineSpacing": spacing, "alignment": alignment},
                                                        "fields": "lineSpacing, alignment"}})
 
     def setTextSuperScript(self, objectID: str, startIndex: int, endIndex: int) -> None:
-        # Formats text indexed from 'startIndex' to 'endIndex' to superscript
+        # Formats text indexed from "startIndex" to "endIndex" to superscript
         self.requests.append({"updateTextStyle": {"objectId": objectID,
                                                   "textRange": {"type": "FIXED_RANGE", "startIndex": startIndex, "endIndex": endIndex},
                                                   "style":  {"baselineOffset": "SUPERSCRIPT"},
                                                   "fields": "baselineOffset"}})
 
     def setTextSuperScriptInTable(self, tableID: str, startIndex: int, endIndex: int, rowIndex: int, colIndex: int) -> None:
-        # For a specific table cell, formats text indexed from 'startIndex' to 'endIndex' to superscript
+        # For a specific table cell, formats text indexed from "startIndex" to "endIndex" to superscript
         self.requests.append({"updateTextStyle": {"objectId": tableID,
                                                   "cellLocation": {"rowIndex": rowIndex, "columnIndex": colIndex},
                                                   "textRange": {"type": "FIXED_RANGE", "startIndex": startIndex, "endIndex": endIndex},
@@ -315,7 +320,7 @@ class GoogleAPITools:
             response = self.sheetService.spreadsheets().values().get(spreadsheetId=sheetID, range=dataRange).execute()
 
             # Flatten the nested list, remove new line and extra spaces
-            return [' '.join(val.split()) for sublist in response["values"] for val in sublist]
+            return [" ".join(val.split()) for sublist in response["values"] for val in sublist]
         except errors.HttpError as error:
             print(f"\tERROR : An error occurred on retrieving announcement data; {error}")
 
@@ -330,7 +335,7 @@ class GoogleAPITools:
             response = self.sheetService.spreadsheets().values().get(spreadsheetId=sheetID, range=dataRange).execute()
 
             # Flatten the nested list, remove new line and extra spaces
-            return [' '.join(val.split()) for sublist in response["values"] for val in sublist]
+            return [" ".join(val.split()) for sublist in response["values"] for val in sublist]
         except errors.HttpError as error:
             print(f"\tERROR : An error occurred on retrieving supplication data; {error}")
 
@@ -354,29 +359,29 @@ class GoogleAPITools:
         # Get formatted string with the date of next Sunday
         dt = self.getNextSundayDate(nextNextSundayDate)
 
-        month = dt.strftime('%B') if type == self.DateFormatMode.Full else dt.strftime('%b')
-        day = dt.strftime('%d')
-        year = dt.strftime('%Y')
+        month = dt.strftime("%B") if type == self.DateFormatMode.Full else dt.strftime("%b")
+        day = dt.strftime("%d")
+        year = dt.strftime("%Y")
 
         # Get rid of leading zero in day
         if (day[0] == "0"):
             day = day[1]
 
         lastNum = day[len(day) - 1]
-        if len(day) > 1 and day[0] != '1':
-            ordinal = 'st' if lastNum == '1' else 'nd' if lastNum == '2' else 'rd' if lastNum == '3' else 'th'
+        if len(day) > 1 and day[0] != "1":
+            ordinal = "st" if lastNum == "1" else "nd" if lastNum == "2" else "rd" if lastNum == "3" else "th"
         else:
-            ordinal = 'th'
-        return (f'{month} {day}{ordinal} {year}', len(month) + len(day) + 1)  # Return string and index of the ordinal for superscripting
+            ordinal = "th"
+        return (f"{month} {day}{ordinal} {year}", len(month) + len(day) + 1)  # Return string and index of the ordinal for superscripting
 
     def getUpcomingSlideTitle(self, type: str) -> str:
         # Get slide file name for upcoming Sunday
         dt = self.getFormattedNextSundayDate(self.DateFormatMode.Short)[0]
-        return f'Sunday Worship Slides {dt} - {type}'
+        return f"Sunday Worship Slides {dt} - {type}"
 
     def openSlideInBrowser(self) -> None:
         # Access may be denied due to slide permissions (HINT: Set source slide URL with editor permission)
-        webbrowser.open(f'https://docs.google.com/presentation/d/{self.newSlideID}')
+        webbrowser.open(f"https://docs.google.com/presentation/d/{self.newSlideID}")
 
     # ==========================================================================================
     # =================================== DRIVE CHANGE TOOLS ===================================
@@ -401,7 +406,7 @@ class GoogleAPITools:
     def getDuplicatePresentation(self, type: str) -> str:
         # Generates a duplicate presentation from source slide
         body = {
-            'name': self.getUpcomingSlideTitle(type)
+            "name": self.getUpcomingSlideTitle(type)
         }
 
         drive_response = {}
@@ -412,7 +417,7 @@ class GoogleAPITools:
             print(f"ERROR : An error occurred on slide duplication; {error}")
 
         # Write ID to file, so it can be deleted later
-        newID = str(drive_response.get('id'))
+        newID = str(drive_response.get("id"))
         with open("Data/SlideIDList.txt", "a") as f:
             f.write(newID + "\n")
 
@@ -434,7 +439,7 @@ class GoogleAPITools:
 
                 # Get modified date of DataBase.db file and compare
                 localModifiedDate = pytz.utc.localize(datetime.datetime.min)
-                driveModifiedDate = pytz.utc.localize(datetime.datetime.strptime(filedDetails['modifiedTime'], '%Y-%m-%dT%H:%M:%S.%fZ'))
+                driveModifiedDate = pytz.utc.localize(datetime.datetime.strptime(filedDetails["modifiedTime"], "%Y-%m-%dT%H:%M:%S.%fZ"))
 
                 if os.path.exists("Data/" + fileNameList[i]):
                     localModifiedDate = datetime.datetime.fromtimestamp(os.path.getmtime("Data/" + fileNameList[i]), datetime.timezone.utc)
@@ -457,5 +462,5 @@ class GoogleAPITools:
 # ==============================================================================================
 
 
-if __name__ == '__main__':
-    gEditor = GoogleAPITools('Stream')
+if __name__ == "__main__":
+    gEditor = GoogleAPITools("Stream")

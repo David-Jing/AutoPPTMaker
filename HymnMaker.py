@@ -9,7 +9,7 @@ from typing import Any, List
 from LookupTools import LookupTools
 from Utility import Utility
 
-'''
+"""
 
 Looks up inputted title and generates formatted hymn slide texts.
 Please run setSource() before getContent().
@@ -17,7 +17,7 @@ Please run setSource() before getContent().
 titleList - list of title text corresponding to the order in formattedLyricsList
 formattedLyricsList - list of formatted verses
 
-'''
+"""
 
 
 class HymnMaker:
@@ -51,7 +51,7 @@ class HymnMaker:
             # Generate titles and numbering
             slides = len(formattedLyricsList)
             for i in range(1, slides + 1):
-                titleList.append(f'{self.hymnTitle.upper()} ({i}/{slides})')
+                titleList.append(f"{self.hymnTitle.upper()} ({i}/{slides})")
 
         return [titleList, formattedLyricsList, self.hymn["source"]]
 
@@ -76,7 +76,7 @@ class HymnMaker:
         # Split long lines
         self._splitLongLines(rawLyricsList)
 
-        # Herustics for a 'well-formatted' slides
+        # Herustics for a "well-formatted" slides
         formattedLyricsList: List[str] = []
         i = 0
         while i < len(rawLyricsList):
@@ -94,7 +94,7 @@ class HymnMaker:
                 appended = self._formatLong(formattedLyricsList, i, rawLyricsList)
 
             if not appended:
-                # Check if the verse is repeated, use '(x2)' to indicate repeat instead
+                # Check if the verse is repeated, use "(x2)" to indicate repeat instead
                 coreVerse = self._getPrincipalPeriod(rawLyricsList[i])
                 if (coreVerse != ""):
                     formattedLyricsList.append(coreVerse[:-1] + f" (x{rawLyricsList[i].count(coreVerse)})\n")
@@ -248,7 +248,7 @@ class HymnMaker:
 
     def _cleanUpVerse(self, verse: str) -> str:
         # Gets rid of [...] header
-        index = verse.find(']') + 1
+        index = verse.find("]") + 1
         verse = verse if index <= 0 else verse[index:]
 
         # Remove new lines before and after text
@@ -259,7 +259,7 @@ class HymnMaker:
 # ==============================================================================================
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # python HymnMaker.py [type] [hymn name]
     type = ""
     if (len(sys. argv) > 2):
@@ -273,7 +273,7 @@ if __name__ == '__main__':
     if (type != ""):
         hm = HymnMaker(type)
 
-        if (hm.setSource(' '.join(sys.argv[2:]))):
+        if (hm.setSource(" ".join(sys.argv[2:]))):
             print(hm.hymn["title"] + "\n")
             [titleList, formattedLyricsList, _] = hm.getContent()
             for i in range(len(formattedLyricsList)):

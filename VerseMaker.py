@@ -10,7 +10,7 @@ from ListMaker import ListMaker
 from LookupTools import LookupTools
 from Utility import Utility
 
-'''
+"""
 
 Looks up inputted biblical verse and generates formatted verse slide texts.
 Please setSource() before running any getters.
@@ -24,7 +24,7 @@ Superscript alignment:
  - 2 superscripted characters = 1 normal space converted to superscript
  - 3 superscripted characters = 1 normal space converted to superscript
 
-'''
+"""
 
 
 class VerseMaker:
@@ -74,7 +74,7 @@ class VerseMaker:
     # ==============================================================================================
 
     def getVerseString(self) -> Any:
-        # No title, but appended with a '--[Verse Source]' on a new line
+        # No title, but appended with a "--[Verse Source]" on a new line
         [title, verseList, ssIndexList] = self.getContent()
 
         # Convert verse to a single string
@@ -103,7 +103,7 @@ class VerseMaker:
         # Try to have even distribution of lines per slide
         numOfSlides = int(lineCount/maxLinesPerSlide) if lineCount % maxLinesPerSlide == 0 \
             else math.ceil(lineCount / maxLinesPerSlide + 0.1)                  # Heuristic : "Fudging" the statistic (guess-timation) for better aesthetics
-        linesPerSlide = round((lineCount/numOfSlides + maxLinesPerSlide) / 2)   # Heuristic : Can't have slides too empty
+        linesPerSlide = round((lineCount/numOfSlides + maxLinesPerSlide) / 2)   # Heuristic : Can't have slides be too empty
 
         # Split verses for each slide and recalculate ssIndexList
         slideVersesList = []
@@ -238,7 +238,7 @@ class VerseMaker:
 # ==============================================================================================
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # python VerseMaker.py [type] [verse source]
 
     type = ""
@@ -257,7 +257,7 @@ if __name__ == '__main__':
         config = configparser.ConfigParser()
         config.read("Data\\" + type + "SlideProperties.ini")
 
-        if (vm.setSource(' '.join(sys.argv[2:]), int(config["SERMON_VERSE_PROPERTIES"]["SermonVerseMaxLineLength"]))):
+        if (vm.setSource(" ".join(sys.argv[2:]), int(config["SERMON_VERSE_PROPERTIES"]["SermonVerseMaxLineLength"]))):
             # GetContent() Test
             [title, verseList, ssIndexList] = vm.getContent()
             print("\n---------------" + title + "---------------")

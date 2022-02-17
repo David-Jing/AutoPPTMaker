@@ -15,11 +15,11 @@ from Logging import Logging
 from Utility import Utility
 from VerseMaker import VerseMaker
 
-'''
+"""
 
 Core class of the SlideMaker application, assembles all other classes to generate Google Slides from an user-defined input file.
 
-'''
+"""
 
 
 class SlideMaker:
@@ -46,40 +46,40 @@ class SlideMaker:
         self.input.read("SlideInputs.ini")
 
         self.slideComponentCaller = {
-            'SundayServiceHeader':          self.sundayServiceSlide,
-            'MonthlyScripture':             self.monthlyScriptureSlide,
-            'Announcements':                self.announcementSlide,
-            'BibleMemorization':            self.bibleVerseMemorizationSlide,
-            'Catechism':                    self.catechismSlide,
-            'BibleMemorizationNextWeek':    self.bibleVerseMemorizationSlide,
-            'CatechismNextWeek':            self.catechismSlide,
-            'Supplications':                self.supplicationSlide,
-            'WorshipHeader':                self.worshipSlide,
-            'CallToWorship':                self.callToWorshipSlide,
-            'Hymn1':                        self.hymnSlide,
-            'PrayerOfConfession':           self.prayerOfConfessionSlide,
-            'LordsPrayer':                  self.lordsPrayerSlide,
-            'Hymn2':                        self.hymnSlide,
-            'HolyCommunion':                self.holyCommunionSlide,
-            'ApostleCreed':                 self.apostleCreedSlide,
-            'SermonHeader':                 self.sermonHeaderSlide,
-            'SermonVerse':                  self.sermonVerseSlide,
-            'Hymn3':                        self.hymnSlide,
-            'Offering':                     self.offeringSlide,
-            'Hymn4':                        self.hymnSlide,
-            'Doxology':                     self.doxologySlide,
-            'Benediction':                  self.benedictionSlide,
-            'NextWeekSchedule':             self.nextWeekScheduleSlide,
+            "SundayServiceHeader":          self.sundayServiceSlide,
+            "MonthlyScripture":             self.monthlyScriptureSlide,
+            "Announcements":                self.announcementSlide,
+            "BibleMemorization":            self.bibleVerseMemorizationSlide,
+            "Catechism":                    self.catechismSlide,
+            "BibleMemorizationNextWeek":    self.bibleVerseMemorizationSlide,
+            "CatechismNextWeek":            self.catechismSlide,
+            "Supplications":                self.supplicationSlide,
+            "WorshipHeader":                self.worshipSlide,
+            "CallToWorship":                self.callToWorshipSlide,
+            "Hymn1":                        self.hymnSlide,
+            "PrayerOfConfession":           self.prayerOfConfessionSlide,
+            "LordsPrayer":                  self.lordsPrayerSlide,
+            "Hymn2":                        self.hymnSlide,
+            "HolyCommunion":                self.holyCommunionSlide,
+            "ApostleCreed":                 self.apostleCreedSlide,
+            "SermonHeader":                 self.sermonHeaderSlide,
+            "SermonVerse":                  self.sermonVerseSlide,
+            "Hymn3":                        self.hymnSlide,
+            "Offering":                     self.offeringSlide,
+            "Hymn4":                        self.hymnSlide,
+            "Doxology":                     self.doxologySlide,
+            "Benediction":                  self.benedictionSlide,
+            "NextWeekSchedule":             self.nextWeekScheduleSlide,
         }
 
         # Slide component should have 0 or 1 arguments
         self.slideComponentArgument = {
-            'BibleMemorizationNextWeek':    True,
-            'CatechismNextWeek':            True,
-            'Hymn1':                        1,
-            'Hymn2':                        2,
-            'Hymn3':                        3,
-            'Hymn4':                        4,
+            "BibleMemorizationNextWeek":    True,
+            "CatechismNextWeek":            True,
+            "Hymn1":                        1,
+            "Hymn2":                        2,
+            "Hymn3":                        3,
+            "Hymn4":                        4,
         }
 
     def setType(self, pptType: PPTMode) -> None:
@@ -388,7 +388,7 @@ class SlideMaker:
         checkPoint = [False, False]
         try:
             for item in refData:
-                if '{Title}' in item[1]:
+                if "{Title}" in item[1]:
                     checkPoint[0] = True
                     self._insertText(
                         objectID=objIDMappingList[0][item[0]],
@@ -398,7 +398,7 @@ class SlideMaker:
                         italic=self._str2bool(self.config[propertyName][dataNameHeader + "TitleItalicized"]),
                         underlined=self._str2bool(self.config[propertyName][dataNameHeader + "TitleUnderlined"]),
                         alignment=self.config[propertyName][dataNameHeader + "TitleAlignment"])
-                elif '{Text}' in item[1]:
+                elif "{Text}" in item[1]:
                     checkPoint[1] = True
                     self._insertText(
                         objectID=objIDMappingList[0][item[0]],
@@ -465,7 +465,7 @@ class SlideMaker:
             checkPoint = [False, False]
             try:
                 for item in refData:
-                    if ('{Title}' in item[1]):
+                    if ("{Title}" in item[1]):
                         checkPoint[0] = True
                         self._insertText(
                             objectID=objIDMappingList[i][item[0]],
@@ -475,7 +475,7 @@ class SlideMaker:
                             italic=self._str2bool(self.config["HYMN_PROPERTIES"]["HymnTitleItalicized"]),
                             underlined=self._str2bool(self.config["HYMN_PROPERTIES"]["HymnTitleUnderlined"]),
                             alignment=self.config["HYMN_PROPERTIES"]["HymnTitleAlignment"])
-                    elif ('{Text}' in item[1]):
+                    elif ("{Text}" in item[1]):
                         checkPoint[1] = True
                         self._insertText(
                             objectID=objIDMappingList[i][item[0]],
@@ -487,7 +487,7 @@ class SlideMaker:
                             alignment=self.config["HYMN_PROPERTIES"]["HymnAlignment"])
 
                         if (multiLineTitle):
-                            self.gEditor.updatePageElementTransform(objIDMappingList[0][item[0]], translateY=int(self.config["HYMN_PROPERTIES"]["HymnLoweredUnitHeight"]))
+                            self.gEditor.updatePageElementTransform(objIDMappingList[i][item[0]], translateY=int(self.config["HYMN_PROPERTIES"]["HymnLoweredUnitHeight"]))
             except Exception:
                 print(f"\tERROR : {traceback.format_exc()}")
                 return []
@@ -521,7 +521,7 @@ class SlideMaker:
         checkPoint = [False, False]
         try:
             for item in refData:
-                if '{Title}' in item[1]:
+                if "{Title}" in item[1]:
                     checkPoint[0] = True
                     self._insertText(
                         objectID=objIDMappingList[0][item[0]],
@@ -531,7 +531,7 @@ class SlideMaker:
                         italic=self._str2bool(self.config[propertyName][dataNameHeader + "TitleItalicized"]),
                         underlined=self._str2bool(self.config[propertyName][dataNameHeader + "TitleUnderlined"]),
                         alignment=self.config[propertyName][dataNameHeader + "TitleAlignment"])
-                elif '{Text}' in item[1]:
+                elif "{Text}" in item[1]:
                     checkPoint[1] = True
                     self._insertText(
                         objectID=objIDMappingList[0][item[0]],
@@ -587,7 +587,7 @@ class SlideMaker:
             checkPoint = [False, False]
             try:
                 for item in refData:
-                    if '{Title}' in item[1]:
+                    if "{Title}" in item[1]:
                         checkPoint[0] = True
                         self._insertText(
                             objectID=objIDMappingList[i][item[0]],
@@ -597,7 +597,7 @@ class SlideMaker:
                             italic=self._str2bool(self.config[propertyName][dataNameHeader + "TitleItalicized"]),
                             underlined=self._str2bool(self.config[propertyName][dataNameHeader + "TitleUnderlined"]),
                             alignment=self.config[propertyName][dataNameHeader + "TitleAlignment"])
-                    elif '{Text}' in item[1]:
+                    elif "{Text}" in item[1]:
                         checkPoint[1] = True
                         self._insertText(
                             objectID=objIDMappingList[i][item[0]],
@@ -637,7 +637,7 @@ class SlideMaker:
         checkPoint = [False, False]
         try:
             for item in refData:
-                if '{Title}' in item[1]:
+                if "{Title}" in item[1]:
                     checkPoint[0] = True
                     self._insertText(
                         objectID=objIDMappingList[0][item[0]],
@@ -647,7 +647,7 @@ class SlideMaker:
                         italic=self._str2bool(self.config[propertyName][dataNameHeader + "TitleItalicized"]),
                         underlined=self._str2bool(self.config[propertyName][dataNameHeader + "TitleUnderlined"]),
                         alignment=self.config[propertyName][dataNameHeader + "TitleAlignment"])
-                elif '{Text}' in item[1]:
+                elif "{Text}" in item[1]:
                     checkPoint[1] = True
                     self._insertText(
                         objectID=objIDMappingList[0][item[0]],
@@ -681,7 +681,7 @@ class SlideMaker:
         checkPoint = [False]
         try:
             for item in refData:
-                if '{Title}' in item[1]:
+                if "{Title}" in item[1]:
                     checkPoint[0] = True
                     self._insertText(
                         objectID=objIDMappingList[0][item[0]],
@@ -720,7 +720,7 @@ class SlideMaker:
             checkPoint = [False, False]
             try:
                 for item in refData:
-                    if '{Title}' in item[1]:
+                    if "{Title}" in item[1]:
                         checkPoint[0] = True
                         self._insertText(
                             objectID=objIDMappingList[i][item[0]],
@@ -730,7 +730,7 @@ class SlideMaker:
                             italic=self._str2bool(self.config[propertyName][dataNameHeader + "TitleItalicized"]),
                             underlined=self._str2bool(self.config[propertyName][dataNameHeader + "TitleUnderlined"]),
                             alignment=self.config[propertyName][dataNameHeader + "TitleAlignment"])
-                    elif '{Text}' in item[1]:
+                    elif "{Text}" in item[1]:
                         checkPoint[1] = True
                         self._insertText(
                             objectID=objIDMappingList[i][item[0]],
@@ -776,7 +776,7 @@ class SlideMaker:
             checkPoint = [False, False]
             try:
                 for item in refData:
-                    if '{Title}' in item[1]:
+                    if "{Title}" in item[1]:
                         checkPoint[0] = True
                         self._insertText(
                             objectID=objIDMappingList[i][item[0]],
@@ -786,7 +786,7 @@ class SlideMaker:
                             italic=self._str2bool(self.config[propertyName][dataNameHeader + "TitleItalicized"]),
                             underlined=self._str2bool(self.config[propertyName][dataNameHeader + "TitleUnderlined"]),
                             alignment=self.config[propertyName][dataNameHeader + "TitleAlignment"])
-                    elif '{Text}' in item[1]:
+                    elif "{Text}" in item[1]:
                         checkPoint[1] = True
                         self._insertText(
                             objectID=objIDMappingList[i][item[0]],
@@ -873,12 +873,20 @@ class SlideMaker:
 # ==============================================================================================
 
 
-if __name__ == '__main__':
-    print("====================================================================")
-    print(f"\t\t\tSlideMaker v{Logging.VersionNumber}")
-    print("====================================================================")
-    print("\nInput Options:\n  Stream Slides: \ts\n  Projected Slides: \tp\n  Regular Slides: \tr\n  Quit: \t\tq\n")
-    print("====================================================================\n")
+if __name__ == "__main__":
+    print(f"""
+====================================================================
+                        SlideMaker v{Logging.VersionNumber}
+====================================================================
+
+Input Options:
+  Livestreaming Slides:                 s
+  Main Sanctuary Projector Slides:      p
+  Lower Auditorium Projector Slides:    r
+  Quit:                                 q
+
+====================================================================
+    """)
 
     mode = ""
 
@@ -896,7 +904,7 @@ if __name__ == '__main__':
             elif (mode == "r"):
                 pptType = SlideMaker.PPTMode.Regular
             elif (mode == "-t"):
-                inputStr = r' '.join(sys.argv[2:])
+                inputStr = r" ".join(sys.argv[2:])
                 print(f"String Visual Length of '{inputStr}' = {Utility.getVisualLength(inputStr)} Units")
 
         if (pptType != SlideMaker.PPTMode.Null):

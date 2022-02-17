@@ -23,7 +23,7 @@ class Logging:
         Error = 2
 
     # Update version number here
-    VersionNumber = "2.0.0"
+    VersionNumber = "2.0.1"
 
     sheetService: googleapiclient.discovery.Resource = None
 
@@ -41,21 +41,21 @@ class Logging:
         # The file token.pickle stores the user's access and refresh tokens, and is
         # created automatically when the authorization flow completes for the first
         # time.
-        if os.path.exists('Data/token.pickle'):
-            creds = Credentials.from_authorized_user_file('Data/token.pickle', ['https://www.googleapis.com/auth/spreadsheets'])
+        if os.path.exists("Data/token.pickle"):
+            creds = Credentials.from_authorized_user_file("Data/token.pickle", ["https://www.googleapis.com/auth/spreadsheets"])
         # If there are no (valid) credentials available, let the user log in.
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
                 creds.refresh(Request())
             else:
                 flow = InstalledAppFlow.from_client_secrets_file(
-                    'Data/credentials.json', ['https://www.googleapis.com/auth/spreadsheets'])
+                    "Data/credentials.json", ["https://www.googleapis.com/auth/spreadsheets"])
                 creds = flow.run_local_server(port=0)
             # Save the credentials for the next run
-            with open('Data/token.pickle', 'w') as token:
+            with open("Data/token.pickle", "w") as token:
                 token.write(creds.to_json())
 
-        Logging.sheetService = build('sheets', 'v4', credentials=creds)
+        Logging.sheetService = build("sheets", "v4", credentials=creds)
 
     @staticmethod
     def writeLog(logType: LogType, msg: str) -> None:
@@ -107,6 +107,6 @@ class Logging:
 # ==============================================================================================
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     print(Logging.writeLog(Logging.LogType.Info, "TEST1"))
     print(Logging.writeLog(Logging.LogType.Info, "TEST2"))

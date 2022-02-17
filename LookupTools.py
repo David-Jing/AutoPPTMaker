@@ -4,13 +4,13 @@ import sqlite3
 from typing import Union
 from lyrics_extractor import SongLyrics
 
-'''
+"""
 
 Looks up ESV bible verses and song lyrics.
 Song lyrics are picked from either a local SQL server or the web;
 the SQL server provides better lookup accuracy than the web.
 
-'''
+"""
 
 
 class LookupTools:
@@ -46,9 +46,9 @@ class LookupTools:
         elif len(lyrics) > 0:
             print("  LYRICS SOURCE: SQL")
             return {
-                'source': 'SQL',
-                'title': hymnName,
-                'lyrics': lyrics
+                "source": "SQL",
+                "title": hymnName,
+                "lyrics": lyrics
             }
 
         # ==========================================================================================
@@ -57,20 +57,20 @@ class LookupTools:
 
         # API Key and Engine ID of Google Custom Search JSON API
         # Refer to https://pypi.org/project/lyrics-extractor/ for more detail
-        GCS_API_KEY = 'AIzaSyA8jw1Ws2yXn7BDqj4yYYJmE1BAK_J53zA'
-        GCS_ENGINE_ID = '501493627fe694701'
+        GCS_API_KEY = "AIzaSyA8jw1Ws2yXn7BDqj4yYYJmE1BAK_J53zA"
+        GCS_ENGINE_ID = "501493627fe694701"
 
         extract_lyrics = SongLyrics(GCS_API_KEY, GCS_ENGINE_ID)
 
         data = {
-            'source': "Web",
-            'title': "Not Found",
-            'lyrics': "Not Found"
+            "source": "Web",
+            "title": "Not Found",
+            "lyrics": "Not Found"
         }
 
         try:
             data = extract_lyrics.get_lyrics(name)
-            data['source'] = "Web"
+            data["source"] = "Web"
         except:
             pass
 
@@ -82,44 +82,44 @@ class LookupTools:
     def getVerse(passage: str) -> str:
         # ESV Bible Verse Lookup ID
         # Refer to https://api.esv.org/ for more details
-        ESV_API_KEY = '6d6a8ca8f166e35b2c0343bfcdada88bd0e7b161'
-        ESV_API_URL = 'https://api.esv.org/v3/passage/text/'
+        ESV_API_KEY = "6d6a8ca8f166e35b2c0343bfcdada88bd0e7b161"
+        ESV_API_URL = "https://api.esv.org/v3/passage/text/"
 
         params: dict[str, Union[bool, str]] = {
-            'q': passage,
-            'include-headings': False,
-            'include-footnotes': False,
-            'include-verse-numbers': True,
-            'include-short-copyright': False,
-            'include-passage-references': False
+            "q": passage,
+            "include-headings": False,
+            "include-footnotes": False,
+            "include-verse-numbers": True,
+            "include-short-copyright": False,
+            "include-passage-references": False
         }
 
         headers = {
-            'Authorization': 'Token %s' % ESV_API_KEY
+            "Authorization": "Token %s" % ESV_API_KEY
         }
 
         response = requests.get(
             ESV_API_URL, params=params, headers=headers)
 
-        passages = response.json()['passages']
+        passages = response.json()["passages"]
 
-        return passages[0].strip() if passages else 'Not Found'
+        return passages[0].strip() if passages else "Not Found"
 
 # ==============================================================================================
 # ============================================ TESTER ==========================================
 # ==============================================================================================
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # python WebLookup.py -v [verse source]
-    if (sys.argv[1] == '-v'):
-        verse = ' '.join(sys.argv[2:])
+    if (sys.argv[1] == "-v"):
+        verse = " ".join(sys.argv[2:])
         if verse:
             print(LookupTools.getVerse(verse))
     # python WebLookup.py -h [hymn name]
-    elif (sys.argv[1] == '-h'):
-        name = ' '.join(sys.argv[2:])
+    elif (sys.argv[1] == "-h"):
+        name = " ".join(sys.argv[2:])
         if name:
             hymn = LookupTools.getHymn(name)
-            print(hymn['title'] + '\n')
-            print(hymn['lyrics'])
+            print(hymn["title"] + "\n")
+            print(hymn["lyrics"])
