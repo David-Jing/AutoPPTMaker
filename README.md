@@ -5,12 +5,14 @@ Refer to "Auto PPT Maker Instructions.docx" for more info.
 
 -------------------
 
-Install PyInstaller 4.4 (!!!) and use 'pyinstaller -F SlideMaker.py' to export as .exe
+Project Setup:
+1. Install poetry via "pip install --upgrade poetry"
+2. Navigate to project directory (where this README file is)
+3. Install virtual environment via "poetry update"
 
-As of 11/23/2021, later versions of PyInstaller is known to cause issues.
+To run projects, enter the virtual environment via "poetry shell" (avoids the usage of "poetry run") or execute directly via "poetry run python [python file]".
+The main application can be executed via "poetry run python .\AutoPPTMaker\SlideMaker.py".
 
 -------------------
 
-For debugging and type checking:
-
-mypy --ignore-missing-imports .\SlideMaker.py
+To export as .exe "poetry run pyinstaller --onefile .\AutoPPTMaker\SlideMaker.py --path=".\AutoPPTMaker"".

@@ -1,7 +1,7 @@
 import sqlite3
 
 if __name__ == '__main__':
-	con = sqlite3.connect('../Data/HymnDatabase.db')
+	con = sqlite3.connect('..AutoPPTMaker/Data/HymnDatabase.db')
 
 	f = open("Lyrics.txt", encoding="utf8")
 	lyrics = f.read()
