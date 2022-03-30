@@ -367,8 +367,8 @@ class GoogleAPITools:
         if (day[0] == "0"):
             day = day[1]
 
-        lastNum = day[len(day) - 1]
-        if len(day) > 1 and day[0] != "1":
+        lastNum = day[-1]
+        if day[0] != "1":  # For exceptions of 11, 12, 13
             ordinal = "st" if lastNum == "1" else "nd" if lastNum == "2" else "rd" if lastNum == "3" else "th"
         else:
             ordinal = "th"

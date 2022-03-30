@@ -35,9 +35,9 @@ poetry run python [python file]
 
 ### 2.2 Main Application
 
-The main application can be executed via:
+After navigating to the AutoPPTMaker subfolder, the main application can be executed via:
 ```
-poetry run python .\AutoPPTMaker\SlideMaker.py
+poetry run python SlideMaker.py
 ```
 
 ## 3. Project Export 

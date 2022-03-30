@@ -3,6 +3,10 @@ from GoogleAPITools import GoogleAPITools
 
 from Utility import Utility
 
+"""
+Static methods for formatted contents to properly fit within a slide
+"""
+
 
 class ListMaker:
     @staticmethod
@@ -20,6 +24,10 @@ class ListMaker:
 
     @staticmethod
     def setLineLengthRestriction(listContent: List[str], numberList: List[str], indentSpace: int, maxLineLength: int) -> List[List[str]]:
+        """
+        Arrange verses such that each line is within the line restrictions limit
+        """
+
         formattedOut = []
 
         indent = "".join(" " for _ in range(indentSpace))
@@ -61,6 +69,10 @@ class ListMaker:
 
     @staticmethod
     def setLinesPerSlideRestriction(lineLengthRestrictedContent: List[List[str]], maxLinesPerSlide: int) -> List[List[Any]]:
+        """
+        Arrange verses such that the number of lines per slide is within the limit
+        """
+
         # Use greedy method to fill slides
         slideContentList = []
         listStartIndex = []

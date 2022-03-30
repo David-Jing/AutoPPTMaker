@@ -200,9 +200,13 @@ class SlideMaker:
         title = self.input["BIBLE_MEMORIZATION"]["BibleMemorization" + lastWeekString + "Title"].upper()
         source = self.input["BIBLE_MEMORIZATION"]["BibleMemorization" + lastWeekString + "Source"].upper()
         maxLineLength = int(self.config["BIBLE_MEMORIZATION_PROPERTIES"]["BibleMemorizationMaxLineLength"])
+        maxLinesPerSlide = int(self.config["BIBLE_MEMORIZATION_PROPERTIES"]["BibleMemorizationMaxLines"])
 
-        slideIDList = self._scriptureSingleSlide(title, source, maxLineLength,
-                                                 "BIBLE_MEMORIZATION_PROPERTIES", "BibleMemorization", nextWeek)
+        if (source == ""):
+            return (self.ModuleStatus.Disabled, [])
+
+        slideIDList = self._scriptureMultiSlide(title, source, maxLineLength, maxLinesPerSlide,
+                                                "BIBLE_MEMORIZATION_PROPERTIES", "BibleMemorization", nextWeek=nextWeek, appendSourceInVerse=True)
         status = self.ModuleStatus.Done if slideIDList else self.ModuleStatus.Failed
         return (status, slideIDList)
 
@@ -249,7 +253,7 @@ class SlideMaker:
         if (enabled != "TRUE" or source == ""):
             return (self.ModuleStatus.Disabled, [])
 
-        slideIDList = self._scriptureMultiSlide(source, maxLineLength, maxLinesPerSlide,
+        slideIDList = self._scriptureMultiSlide(source, source, maxLineLength, maxLinesPerSlide,
                                                 "CALL_TO_WORSHIP_PROPERTIES", "CallToWorship")
         status = self.ModuleStatus.Done if slideIDList else self.ModuleStatus.Failed
         return (status, slideIDList)
@@ -263,13 +267,14 @@ class SlideMaker:
         source = self.input["PRAYER_OF_CONFESSION"]["PrayerOfConfessionSource"].upper()
         enabled = self.input["PRAYER_OF_CONFESSION"]["PrayerOfConfessionEnabled"].upper()
         maxLineLength = int(self.config["PRAYER_OF_CONFESSION_PROPERTIES"]["PrayerOfConfessionMaxLineLength"])
+        maxLinesPerSlide = int(self.config["PRAYER_OF_CONFESSION_PROPERTIES"]["PrayerOfConfessionMaxLines"])
 
         # Do not generate section if not enabled
         if (enabled != "TRUE" or source == ""):
             return (self.ModuleStatus.Disabled, [])
 
-        slideIDList = self._scriptureSingleSlide(title, source, maxLineLength,
-                                                 "PRAYER_OF_CONFESSION_PROPERTIES", "PrayerOfConfession")
+        slideIDList = self._scriptureMultiSlide(title, source, maxLineLength, maxLinesPerSlide,
+                                                "PRAYER_OF_CONFESSION_PROPERTIES", "PrayerOfConfession", appendSourceInVerse=True)
         status = self.ModuleStatus.Done if slideIDList else self.ModuleStatus.Failed
         return (status, slideIDList)
 
@@ -306,7 +311,9 @@ class SlideMaker:
         result = True
         slideIDList: List[str] = []
         for i in range(len(sourceList) - 1, -1, -1):
-            slideIDListSub = self._scriptureMultiSlide(sourceList[i].strip(), maxLineLength, maxLinesPerSlide, "SERMON_VERSE_PROPERTIES", "SermonVerse")
+            source = sourceList[i].strip()
+            slideIDListSub = self._scriptureMultiSlide(source, source, maxLineLength, maxLinesPerSlide,
+                                                       "SERMON_VERSE_PROPERTIES", "SermonVerse")
 
             if (not slideIDListSub and result):
                 result = False
@@ -498,8 +505,9 @@ class SlideMaker:
 
         return slideIDList
 
-    def _scriptureSingleSlide(self, title: str, source: str, charPerLine: int, propertyName: str, dataNameHeader: str, nextWeek: bool = False) -> List[str]:
-        # Assumes monthly scripture is short enough to fit in one slide
+    def _scriptureSingleSlide(self, title: str, source: str, charPerLine: int, propertyName: str, dataNameHeader: str,
+                              nextWeek: bool = False) -> List[str]:
+        # Assumes scripture is short enough to fit in one slide
         nextWeekString = "NextWeek" if nextWeek else ""
         slideIndex = int(self.config[propertyName][dataNameHeader + nextWeekString + "Index"])
 
@@ -509,7 +517,7 @@ class SlideMaker:
             verseString = "{Text}"
             ssIndexList = []
         else:
-            [verseString, ssIndexList] = self.verseMaker.getVerseString()
+            [verseString, ssIndexList] = self.verseMaker.getVerseStringSingleSlide()
 
         # Generate create duplicate request
         objIDMappingList = self._duplicateSlide(1, slideIndex)
@@ -558,16 +566,18 @@ class SlideMaker:
 
         return slideIDList
 
-    def _scriptureMultiSlide(self, source: str, maxLineLength: int, maxLinesPerSlide: int, propertyName: str, dataNameHeader: str) -> List[str]:
-        # Assumes monthly scripture is short enough to fit in one slide
+    def _scriptureMultiSlide(self, title: str,  source: str, maxLineLength: int, maxLinesPerSlide: int, propertyName: str, dataNameHeader: str,
+                             nextWeek: bool = False, appendSourceInVerse: bool = False) -> List[str]:
+        nextWeekString = "NextWeek" if nextWeek else ""
+
         if (not self.verseMaker.setSource(source, maxLineLength)):
             print(f"\tERROR : Verse {source} not found.")
             return []
 
-        [title, slideVersesList, slideSSIndexList] = self.verseMaker.getVerseStringMultiSlide(maxLinesPerSlide)
+        [_, slideVersesList, slideSSIndexList] = self.verseMaker.getVerseStringMultiSlide(maxLinesPerSlide, appendSourceInVerse)
 
         # Generate create duplicate request and commit it
-        slideIndex = int(self.config[propertyName][dataNameHeader + "Index"])
+        slideIndex = int(self.config[propertyName][dataNameHeader + nextWeekString + "Index"])
 
         # Generate create duplicate request
         objIDMappingList = self._duplicateSlide(len(slideVersesList), slideIndex)
@@ -592,7 +602,7 @@ class SlideMaker:
                         self._insertText(
                             objectID=objIDMappingList[i][item[0]],
                             text=title,
-                            size=int(self.config[propertyName][dataNameHeader + "TitleTextSize"]),
+                            size=int(self.config[propertyName][dataNameHeader + nextWeekString + "TitleTextSize"]),
                             bold=self._str2bool(self.config[propertyName][dataNameHeader + "TitleBolded"]),
                             italic=self._str2bool(self.config[propertyName][dataNameHeader + "TitleItalicized"]),
                             underlined=self._str2bool(self.config[propertyName][dataNameHeader + "TitleUnderlined"]),

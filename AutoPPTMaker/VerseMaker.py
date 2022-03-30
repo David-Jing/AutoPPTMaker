@@ -22,7 +22,7 @@ ssIndexList - list of lists of character indexes that requires super scripting
 Superscript alignment:
  - 1 superscripted character = 2 normal spaces converted to superscript
  - 2 superscripted characters = 1 normal space converted to superscript
- - 3 superscripted characters = 1 normal space converted to superscript
+ - 3 superscripted characters = 0 normal space converted to superscript
 
 """
 
@@ -73,8 +73,8 @@ class VerseMaker:
     # ======================================= CUSTOM GETTERS =======================================
     # ==============================================================================================
 
-    def getVerseString(self) -> Any:
-        # No title, but appended with a "--[Verse Source]" on a new line
+    def getVerseStringSingleSlide(self) -> Any:
+        # No title, but appends a "--[Verse Source]" on a new line at the end of the verse
         [title, verseList, ssIndexList] = self.getContent()
 
         # Convert verse to a single string
@@ -83,17 +83,18 @@ class VerseMaker:
             for line in verse:
                 verseString += line
 
-        # Appends title after verse
-        title = "—" + title.title()
-        sourceIndentSpace = int(0.93*self.maxLineLength/250) - len(title)          # Heuristic : It looks better if text is not right against the right wall (space, " ", is 250 units wide)
-        titleIndent = "".join(" " for _ in range(sourceIndentSpace if sourceIndentSpace > 0 else 0))
-        verseString += "\n" + titleIndent + title + "\n"
+        # Appends a "--[Verse Source]" to verses
+        verseString += self._getFormattedVerseSource(title)
 
         return [verseString, ssIndexList]
 
-    def getVerseStringMultiSlide(self, maxLinesPerSlide: int) -> Any:
+    def getVerseStringMultiSlide(self, maxLinesPerSlide: int, appendSourceInVerse: bool = False) -> Any:
         # Splits verse into multiple components, each per slide
         [title, verseList, ssIndexList] = self.getContent()
+
+        # Appends a "--[Verse Source]" to verses
+        if appendSourceInVerse:
+            verseList[-1].append(self._getFormattedVerseSource(title))
 
         # Calculate the number of slides needed
         lineCount = 0
@@ -142,6 +143,14 @@ class VerseMaker:
     # ==============================================================================================
     # ========================================= FORMATTER ==========================================
     # ==============================================================================================
+
+    def _getFormattedVerseSource(self, sourceStr: str) -> str:
+        # Generates an indented "--[Verse Source]" string; for appending source after verse
+        sourceStr = "—" + sourceStr.title()                                            # String.title() makes every first character capitalized
+        sourceStrIndentSpace = int(0.93*self.maxLineLength/250) - len(sourceStr)       # Heuristic : It looks better if text is not right against the right wall (space, " ", is 250 units wide)
+        sourceStrIndent = "".join(" " for _ in range(sourceStrIndentSpace if sourceStrIndentSpace > 0 else 0))
+
+        return f"\n{sourceStrIndent}{sourceStr}"
 
     def _getFormattedVerses(self, verses: str) -> List[List[str]]:
         [verseList, numberList] = self._getVerseComponents(verses)
@@ -225,8 +234,10 @@ class VerseMaker:
 
     def _getSSAlignmentSpace(self, ssCharLength: int) -> int:
         # Number of converted spaces need to align line with verse number and lines without;
-        # assumes bible verse number does not exceed 3 digits
-        if (ssCharLength == 3 or ssCharLength == 2):
+        # assumes bible verse number does not exceed more than 3 digits
+        if (ssCharLength == 3):
+            return 0
+        elif (ssCharLength == 2):
             return 1
         elif (ssCharLength == 1):
             return 2
@@ -267,7 +278,7 @@ if __name__ == "__main__":
 
             # GetVerseString() Test
             print("\n\n===========================================================\n")
-            [verseString, ssIndexList] = vm.getVerseString()
+            [verseString, ssIndexList] = vm.getVerseStringSingleSlide()
             print(verseString, end="")
 
             # getVerseStringMultiSlide() Test

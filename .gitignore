@@ -132,4 +132,4 @@ dmypy.json
 *.pickle
 
 # SlideMaker
-Data/SlideIDList.txt
+AutoPPTMaker/Data/SlideIDList.txt
