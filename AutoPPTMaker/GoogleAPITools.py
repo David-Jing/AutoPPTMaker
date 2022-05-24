@@ -359,19 +359,20 @@ class GoogleAPITools:
         # Get formatted string with the date of next Sunday
         dt = self.getNextSundayDate(nextNextSundayDate)
 
-        month = dt.strftime("%B") if type == self.DateFormatMode.Full else dt.strftime("%b")
+        month = dt.strftime("%B")
         day = dt.strftime("%d")
         year = dt.strftime("%Y")
 
+        ordinal = "th" if day[0] == "1" \
+            else "st" if day[1] == "1" \
+            else "nd" if day[1] == "2" \
+            else "rd" if day[1] == "3" \
+            else "th"
+
         # Get rid of leading zero in day
-        if (day[0] == "0"):
+        if day[0] == "0":
             day = day[1]
 
-        lastNum = day[-1]
-        if day[0] != "1":  # For exceptions of 11, 12, 13
-            ordinal = "st" if lastNum == "1" else "nd" if lastNum == "2" else "rd" if lastNum == "3" else "th"
-        else:
-            ordinal = "th"
         return (f"{month} {day}{ordinal} {year}", len(month) + len(day) + 1)  # Return string and index of the ordinal for superscripting
 
     def getUpcomingSlideTitle(self, type: str) -> str:

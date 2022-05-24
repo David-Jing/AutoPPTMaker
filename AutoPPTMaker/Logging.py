@@ -23,7 +23,7 @@ class Logging:
         Error = 2
 
     # Update version number here
-    VersionNumber = "2.1.0"
+    VersionNumber = "2.2.0"
 
     sheetService: googleapiclient.discovery.Resource = None
 

@@ -4,6 +4,7 @@ import sys
 import time
 import traceback
 import numpy
+import urllib.request
 
 from typing import Dict, List, Tuple
 from enum import Enum
@@ -197,12 +198,13 @@ class SlideMaker:
 
     def bibleVerseMemorizationSlide(self, nextWeek: bool = False) -> Tuple[ModuleStatus, List[str]]:
         lastWeekString = "LastWeek" if not nextWeek else ""
+        enabled = self.input["BIBLE_MEMORIZATION"]["BibleMemorization" + lastWeekString + "Enabled"].upper()
         title = self.input["BIBLE_MEMORIZATION"]["BibleMemorization" + lastWeekString + "Title"].upper()
         source = self.input["BIBLE_MEMORIZATION"]["BibleMemorization" + lastWeekString + "Source"].upper()
         maxLineLength = int(self.config["BIBLE_MEMORIZATION_PROPERTIES"]["BibleMemorizationMaxLineLength"])
         maxLinesPerSlide = int(self.config["BIBLE_MEMORIZATION_PROPERTIES"]["BibleMemorizationMaxLines"])
 
-        if (source == ""):
+        if (enabled != "TRUE" or source == ""):
             return (self.ModuleStatus.Disabled, [])
 
         slideIDList = self._scriptureMultiSlide(title, source, maxLineLength, maxLinesPerSlide,
@@ -211,7 +213,12 @@ class SlideMaker:
         return (status, slideIDList)
 
     def catechismSlide(self, nextWeek: bool = False) -> Tuple[ModuleStatus, List[str]]:
-        title = self.input["CATECHISM"]["Catechism" + ("LastWeek" if not nextWeek else "") + "Title"].upper()
+        lastWeekString = "LastWeek" if not nextWeek else ""
+        enabled = self.input["CATECHISM"]["Catechism" + lastWeekString + "Enabled"].upper()
+        title = self.input["CATECHISM"]["Catechism" + lastWeekString + "Title"].upper()
+
+        if (enabled != "TRUE"):
+            return (self.ModuleStatus.Disabled, [])
 
         slideIDList = self._headerOnlySlide(title, "CATECHISM_PROPERTIES", "Catechism", nextWeek)
         status = self.ModuleStatus.Done if slideIDList else self.ModuleStatus.Failed
@@ -903,6 +910,14 @@ Input Options:
     # Set seed so RNG is consist between instances
     seed = int(time.time())
 
+    # Test if we are connected to the internet
+    try:
+        urllib.request.urlopen("http://google.com")
+    except:
+        text = print("ERROR: No internet connection detected.")
+        time.sleep(3)
+        mode = "q"
+
     while (mode != "q"):
         pptType = SlideMaker.PPTMode.Null
         mode = input("Input: ")
@@ -913,9 +928,6 @@ Input Options:
                 pptType = SlideMaker.PPTMode.Projected
             elif (mode == "r"):
                 pptType = SlideMaker.PPTMode.Regular
-            elif (mode == "-t"):
-                inputStr = r" ".join(sys.argv[2:])
-                print(f"String Visual Length of '{inputStr}' = {Utility.getVisualLength(inputStr)} Units")
 
         if (pptType != SlideMaker.PPTMode.Null):
             start = time.time()
