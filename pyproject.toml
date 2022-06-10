@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "AutoPPTMaker"
-version = "2.2.0"
+version = "2.3.0"
 description = "Automated worship slide creator for FCNABC's English Congregation."
 authors = ["David <djing123@icloud.com>"]
 

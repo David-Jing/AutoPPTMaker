@@ -200,16 +200,28 @@ class SlideMaker:
         lastWeekString = "LastWeek" if not nextWeek else ""
         enabled = self.input["BIBLE_MEMORIZATION"]["BibleMemorization" + lastWeekString + "Enabled"].upper()
         title = self.input["BIBLE_MEMORIZATION"]["BibleMemorization" + lastWeekString + "Title"].upper()
-        source = self.input["BIBLE_MEMORIZATION"]["BibleMemorization" + lastWeekString + "Source"].upper()
+        sources = self.input["BIBLE_MEMORIZATION"]["BibleMemorization" + lastWeekString + "Source"].upper()
+        sourceList = sources.split(",")
         maxLineLength = int(self.config["BIBLE_MEMORIZATION_PROPERTIES"]["BibleMemorizationMaxLineLength"])
         maxLinesPerSlide = int(self.config["BIBLE_MEMORIZATION_PROPERTIES"]["BibleMemorizationMaxLines"])
 
-        if (enabled != "TRUE" or source == ""):
+        if (enabled != "TRUE" or sources == ""):
             return (self.ModuleStatus.Disabled, [])
 
-        slideIDList = self._scriptureMultiSlide(title, source, maxLineLength, maxLinesPerSlide,
-                                                "BIBLE_MEMORIZATION_PROPERTIES", "BibleMemorization", nextWeek=nextWeek, appendSourceInVerse=True)
-        status = self.ModuleStatus.Done if slideIDList else self.ModuleStatus.Failed
+        # Iterate and generate the slides by each unique source
+        result = True
+        slideIDList: List[str] = []
+        for i in range(len(sourceList) - 1, -1, -1):
+            source = sourceList[i].strip()
+            slideIDListSub = self._scriptureMultiSlide(title, source, maxLineLength, maxLinesPerSlide,
+                                                       "BIBLE_MEMORIZATION_PROPERTIES", "BibleMemorization",
+                                                       nextWeek=nextWeek, appendSourceInVerse=True)
+            if (not slideIDListSub and result):
+                result = False
+
+            slideIDList = slideIDListSub + slideIDList
+
+        status = self.ModuleStatus.Done if result else self.ModuleStatus.Failed
         return (status, slideIDList)
 
     def catechismSlide(self, nextWeek: bool = False) -> Tuple[ModuleStatus, List[str]]:
