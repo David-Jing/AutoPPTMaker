@@ -41,12 +41,15 @@ class HymnMaker:
 
         return (self.hymn["title"] != "Not Found" and self.hymn["lyrics"] != "Not Found")
 
-    def getContent(self) -> List[Any]:
+    def getContent(self, format=True) -> List[Any]:
         titleList = []
         formattedLyricsList = []
 
         if (self.hymn != ""):
-            formattedLyricsList = self._getFormattedLyrics(self.hymn["lyrics"])
+            if format:
+                formattedLyricsList = self._getFormattedLyrics(self.hymn["lyrics"])
+            else:
+                formattedLyricsList = self._getRawLyrics(self.hymn["lyrics"])
 
             # Generate titles and numbering
             slides = len(formattedLyricsList)
@@ -58,6 +61,25 @@ class HymnMaker:
     # ==============================================================================================
     # ========================================= FORMATTER ==========================================
     # ==============================================================================================
+
+    def _getRawLyrics(self, lyrics: str) -> List[str]:
+        # Remove [...] headers and lyrics in brackets and split lyrics into its sections
+        rawLyricsList = re.sub("(\[.*?\])|(\(.*?\))", "", lyrics).split("\n\n")
+
+        # Remove starting and ending new lines
+        for i in range(len(rawLyricsList)):
+            rawLyricsList[i] = rawLyricsList[i].strip()
+
+        # Remove duplicate blocks if it is under the maximum number of lines
+        self._removeRepeatedAdjacentBlocks(rawLyricsList)
+
+        # Split sections into lines and remove adjacent repeated lines that occur more than 3 times
+        self._removeRepeatedLines(rawLyricsList)
+
+        # Split long lines
+        self._splitLongLines(rawLyricsList)
+
+        return rawLyricsList
 
     def _getFormattedLyrics(self, lyrics: str) -> List[str]:
         # Remove [...] headers and lyrics in brackets and split lyrics into its sections
