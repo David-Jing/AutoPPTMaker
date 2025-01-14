@@ -29,7 +29,7 @@ if __name__ == '__main__':
                 cursor.execute(
                     "INSERT INTO Hymn (HymnName, Version, Number, End, Lyrics, Comments) "
                     "VALUES (?, ?, ?, ?, ?, ?)",
-                    (hymnName.upper(), 1, i, length, lyrics[i], "")
+                    (hymnName.upper(), 1, i, length - 1, lyrics[i], "")
                 )
             con.commit()
 
