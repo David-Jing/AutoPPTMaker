@@ -454,9 +454,9 @@ class SlideMaker:
 
         [titleList, formattedLyricsList, lookupSource] = self.hymnMaker.getContent()
 
-        # Log if is sourced from the web
-        if lookupSource == "Web":
-            Logging.writeLog(Logging.LogType.Info, f"SlideMaker - Hymn web source lookup: [{source}]")
+        # Log if no local data is found
+        if lookupSource != "SQL":
+            Logging.writeLog(Logging.LogType.Info, f"SlideMaker - No local hymn data found for [{source}]")
 
         # Title font size adjustments and decide if the lyrics text box needs to be shifted
         titleFontSize = int(self.config["HYMN_PROPERTIES"]["HymnTitleTextSize"])
@@ -503,17 +503,20 @@ class SlideMaker:
                             alignment=self.config["HYMN_PROPERTIES"]["HymnTitleAlignment"])
                     elif ("{Text}" in item[1]):
                         checkPoint[1] = True
-                        self._insertText(
-                            objectID=objIDMappingList[i][item[0]],
-                            text=formattedLyricsList[i],
-                            size=int(self.config["HYMN_PROPERTIES"]["HymnTextSize"]),
-                            bold=self._str2bool(self.config["HYMN_PROPERTIES"]["HymnBolded"]),
-                            italic=self._str2bool(self.config["HYMN_PROPERTIES"]["HymnItalicized"]),
-                            underlined=self._str2bool(self.config["HYMN_PROPERTIES"]["HymnUnderlined"]),
-                            alignment=self.config["HYMN_PROPERTIES"]["HymnAlignment"])
 
-                        if (multiLineTitle):
-                            self.gEditor.updatePageElementTransform(objIDMappingList[i][item[0]], translateY=int(self.config["HYMN_PROPERTIES"]["HymnLoweredUnitHeight"]))
+                        # Insert lyrics, if any
+                        if formattedLyricsList[i]:
+                            self._insertText(
+                                objectID=objIDMappingList[i][item[0]],
+                                text=formattedLyricsList[i],
+                                size=int(self.config["HYMN_PROPERTIES"]["HymnTextSize"]),
+                                bold=self._str2bool(self.config["HYMN_PROPERTIES"]["HymnBolded"]),
+                                italic=self._str2bool(self.config["HYMN_PROPERTIES"]["HymnItalicized"]),
+                                underlined=self._str2bool(self.config["HYMN_PROPERTIES"]["HymnUnderlined"]),
+                                alignment=self.config["HYMN_PROPERTIES"]["HymnAlignment"])
+
+                            if (multiLineTitle):
+                                self.gEditor.updatePageElementTransform(objIDMappingList[i][item[0]], translateY=int(self.config["HYMN_PROPERTIES"]["HymnLoweredUnitHeight"]))
             except Exception:
                 print(f"\tERROR : {traceback.format_exc()}")
                 return []
@@ -920,7 +923,7 @@ Input Options:
     mode = ""
 
     # Set seed so RNG is consist between instances
-    seed = int(time.time())
+    seed = int(time.time()) % 1000
 
     # Test if we are connected to the internet
     try:

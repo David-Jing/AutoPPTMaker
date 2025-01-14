@@ -1,22 +1,43 @@
 import sqlite3
 
 if __name__ == '__main__':
-	con = sqlite3.connect('..AutoPPTMaker/Data/HymnDatabase.db')
+    try:
+        # ============================== READ LYRICS FILE ==============================
 
-	f = open("Lyrics.txt", encoding="utf8")
-	lyrics = f.read()
+        with open(r"SQL\Lyrics.txt", "r", encoding="utf8") as f:
+            lyrics = f.read().strip().split("\n\n")
 
-	lyrics = lyrics.split("\n\n")
+        if not lyrics:
+            raise ValueError("The lyrics file is empty or improperly formatted.")
 
-	length = len(lyrics) - 1
-	hymnName = lyrics[0]
-	for i in range(0, length):
-		con.execute(f"INSERT INTO Hymn VALUES(\"{hymnName.upper()}\", 1, {i+1}, {length}, \"{lyrics[i+1]}\", \"\")")
+        hymnName = lyrics[0]
+        length = len(lyrics)
 
-	'''
-	for row in con.execute("SELECT * FROM Hymn Where HymnName = 'All Glory Be To Christ'"):
-	    print(row)
-	'''
+		# ========================== INSERT LYRICS INTO DATABASE =======================
 
-	con.commit()
-	con.close()
+        # Connect to the SQLite database
+        with sqlite3.connect(r'AutoPPTMaker\Data\HymnDatabase.db') as con:
+            cursor = con.cursor()
+
+			# Check if the hymn already exists in the database
+            cursor.execute("SELECT * FROM Hymn WHERE hymnName = ?", (hymnName.upper(),))
+            if cursor.fetchone():
+                raise ValueError(f"The hymn [{hymnName}] already exists in the database.")
+
+            # Insert verses into the database
+            for i in range(1, length):
+                cursor.execute(
+                    "INSERT INTO Hymn (HymnName, Version, Number, End, Lyrics, Comments) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (hymnName.upper(), 1, i, length, lyrics[i], "")
+                )
+            con.commit()
+
+        print(f"Successfully inserted [{length - 1}] verses of [{hymnName}] into the database.")
+
+    except FileNotFoundError:
+        print("The specified lyrics file was not found.")
+    except sqlite3.Error as e:
+        print(f"Database error: {e}")
+    except Exception as e:
+        print(f"An error occurred: {e}")

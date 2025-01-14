@@ -2,7 +2,6 @@ import sys
 import requests
 import sqlite3
 from typing import Union
-from lyrics_extractor import SongLyrics
 
 """
 
@@ -52,31 +51,12 @@ class LookupTools:
             }
 
         # ==========================================================================================
-        # ====================================== WEB LOOKUP ========================================
-        # ==========================================================================================
 
-        # API Key and Engine ID of Google Custom Search JSON API
-        # Refer to https://pypi.org/project/lyrics-extractor/ for more detail
-        GCS_API_KEY = "AIzaSyA8jw1Ws2yXn7BDqj4yYYJmE1BAK_J53zA"
-        GCS_ENGINE_ID = "501493627fe694701"
-
-        extract_lyrics = SongLyrics(GCS_API_KEY, GCS_ENGINE_ID)
-
-        data = {
-            "source": "Web",
-            "title": "Not Found",
-            "lyrics": "Not Found"
+        return {
+            "source": "None",
+            "title": name,
+            "lyrics": ""
         }
-
-        try:
-            data = extract_lyrics.get_lyrics(name)
-            data["source"] = "Web"
-        except:
-            pass
-
-        print("  LYRICS SOURCE: Web")
-
-        return data
 
     @staticmethod
     def getVerse(passage: str) -> str:
@@ -111,12 +91,12 @@ class LookupTools:
 
 
 if __name__ == "__main__":
-    # python WebLookup.py -v [verse source]
+    # python LookupTools.py -v [verse source]
     if (sys.argv[1] == "-v"):
         verse = " ".join(sys.argv[2:])
         if verse:
             print(LookupTools.getVerse(verse))
-    # python WebLookup.py -h [hymn name]
+    # python LookupTools.py -h [hymn name]
     elif (sys.argv[1] == "-h"):
         name = " ".join(sys.argv[2:])
         if name:
